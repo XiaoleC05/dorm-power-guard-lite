@@ -12,17 +12,46 @@
       </template>
       
       <el-table :data="records" v-loading="loading" stripe>
-        <el-table-column prop="dorm_number" label="宿舍号" width="120" />
-        <el-table-column prop="balance" label="余额（元）" width="120">
-          <template #default="{ row }">
-            <span :class="getBalanceClass(row.balance)">{{ row.balance }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="power_consumption" label="用电量（度）" width="120" />
+        <el-table-column prop="dorm_number" label="宿舍号" width="100" fixed="left" />
         <el-table-column prop="record_time" label="记录时间" width="180">
           <template #default="{ row }">
             {{ formatTime(row.record_time) }}
           </template>
+        </el-table-column>
+        <el-table-column label="空调" width="150">
+          <el-table-column prop="kbalance" label="余量（度）" width="120">
+            <template #default="{ row }">
+              <span :class="getBalanceClass(row.kbalance || row.balance)">
+                {{ row.kbalance !== null && row.kbalance !== undefined ? row.kbalance.toFixed(2) : (row.balance ? row.balance.toFixed(2) : '-') }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="kpower_consumption" label="用电量（度）" width="120">
+            <template #default="{ row }">
+              <span v-if="row.kpower_consumption !== null && row.kpower_consumption !== undefined">
+                {{ row.kpower_consumption > 0 ? '+' : '' }}{{ row.kpower_consumption.toFixed(2) }}
+              </span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+        </el-table-column>
+        <el-table-column label="照明" width="150">
+          <el-table-column prop="zbalance" label="余量（度）" width="120">
+            <template #default="{ row }">
+              <span v-if="row.zbalance !== null && row.zbalance !== undefined" :class="getBalanceClass(row.zbalance)">
+                {{ row.zbalance.toFixed(2) }}
+              </span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="zpower_consumption" label="用电量（度）" width="120">
+            <template #default="{ row }">
+              <span v-if="row.zpower_consumption !== null && row.zpower_consumption !== undefined">
+                {{ row.zpower_consumption > 0 ? '+' : '' }}{{ row.zpower_consumption.toFixed(2) }}
+              </span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="180">
           <template #default="{ row }">
@@ -73,7 +102,7 @@ const getBalanceClass = (balance) => {
 const loadRecords = async () => {
   loading.value = true
   try {
-    const dormNumber = powerStore.dormNumber || '101'
+    const dormNumber = powerStore.dormNumber || '320'
     const data = await getRecords(dormNumber, pageSize.value)
     records.value = data
     total.value = data.length

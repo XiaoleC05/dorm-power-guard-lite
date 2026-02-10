@@ -1,10 +1,14 @@
 # DormPowerGuard-Lite
 
-宿舍电费监控系统 - MVP快速验证方案
+西华大学宿舍电费监控系统 - MVP快速验证方案
 
 ## 项目简介
 
-这是一个轻量级的宿舍电费监控系统，通过Python爬虫定时抓取电费数据，当余额低于设定阈值时自动发送邮件或QQ消息告警。
+这是一个针对**西华大学一卡通宿舍用电小程序**的轻量级电费监控系统，通过Python爬虫定时抓取电费数据，当余额低于设定阈值时自动发送邮件或QQ消息告警。
+
+**管理员QQ：714085964**
+
+> 本项目专门为西华大学学生设计，用于监控宿舍电费使用情况，避免因电费不足导致停电。
 
 ## 技术栈
 
@@ -56,6 +60,8 @@ dorm-power-guard-lite/
 
 ## 快速开始
 
+> **详细使用指南请参考：`使用指南.md`**
+
 ### 1. 环境要求
 
 - Python 3.8+
@@ -99,11 +105,14 @@ DB_USER=root
 DB_PASSWORD=your_password
 DB_NAME=dorm_power_guard
 
-# 爬虫配置（需要根据实际网站修改）
-CRAWLER_BASE_URL=http://example.com/power
-CRAWLER_USERNAME=your_username
-CRAWLER_PASSWORD=your_password
-CRAWLER_DORM_NUMBER=101
+# 爬虫配置（西华大学一卡通系统）
+CRAWLER_BASE_URL=https://ecard.xhu.edu.cn
+CRAWLER_API_BASE_URL=https://ecard.xhu.edu.cn/api
+CRAWLER_DORM_NUMBER=320  # 您的宿舍号
+# 认证信息需要通过抓包获取（详见抓包教程）
+CRAWLER_OPENID=your_openid
+CRAWLER_JSESSIONID=your_jsessionid
+CRAWLER_ROOM_ID=your_room_id
 
 # 定时任务配置（每天执行时间点）
 SCHEDULER_HOURS=8,12,18,22
@@ -124,22 +133,24 @@ QQ_BOT_API_URL=http://localhost:5700
 QQ_BOT_GROUP_ID=123456789
 ```
 
-#### 2.4 实现爬虫逻辑
+#### 2.4 配置西华大学一卡通认证信息
 
-**重要**：针对微信小程序（ecard.xhu.edu.cn），需要使用抓包工具分析API接口。
+**重要**：本项目针对**西华大学一卡通宿舍用电小程序**，需要通过抓包工具获取认证信息。
 
-**详细步骤请参考：`backend/CRAWLER_GUIDE.md`**
+**详细步骤请参考：**
+- `抓包教程-快速版.md` - 快速上手指南
+- `抓包教程-详细版.md` - 详细教程
 
 简要流程：
-1. 使用Charles/Fiddler等工具抓包分析小程序API
-2. 提取认证Token
-3. 配置Token到 `.env` 文件
-4. 根据实际API调整 `backend/app/crawler.py` 中的接口地址和参数
+1. 使用Charles/Fiddler等工具抓包分析西华大学一卡通小程序API
+2. 提取 `openid` 和 `JSESSIONID`（Cookie）
+3. 配置到 `.env` 文件
+4. 系统会自动使用这些认证信息抓取电费数据
 
 **快速测试**：
 ```bash
 cd backend
-python test_crawler.py  # 测试爬虫功能
+python -c "from app.crawler import get_crawler; crawler = get_crawler(); print(crawler.fetch_power_data())"
 ```
 
 #### 2.5 启动后端
@@ -259,6 +270,14 @@ npm run build
 - [ ] 告警功能测试
 - [ ] 部署文档完善
 
+## 联系与支持
+
+- **管理员QQ**：714085964
+- **项目说明**：本项目专门为西华大学学生设计，用于监控宿舍电费使用情况
+- **数据来源**：西华大学一卡通宿舍用电小程序（https://ecard.xhu.edu.cn）
+
+如有问题或建议，欢迎通过QQ联系管理员。
+
 ## 贡献
 
 欢迎提交Issue和Pull Request！
@@ -266,3 +285,7 @@ npm run build
 ## 许可证
 
 MIT License
+
+---
+
+**注意**：本项目仅用于学习和个人使用，请遵守西华大学相关规定，不得用于商业用途。

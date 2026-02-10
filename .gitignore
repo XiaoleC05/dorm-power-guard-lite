@@ -4,16 +4,40 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-env/
-ENV/
-*.egg-info/
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# 环境变量
+# 环境变量和配置
 .env
 .env.local
+.env.*.local
+*.env
+backend/.env
+frontend/.env
+
+# 日志文件
+*.log
+logs/
+backend/logs/
+*.log.*
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
 
 # IDE
 .vscode/
@@ -21,14 +45,7 @@ build/
 *.swp
 *.swo
 *~
-
-# 日志
-*.log
-logs/
-
-# 数据库
-*.db
-*.sqlite
+.DS_Store
 
 # Node
 node_modules/
@@ -39,12 +56,35 @@ yarn-error.log*
 
 # 前端构建
 frontend/dist/
+frontend/build/
 frontend/.vite/
 
-# 系统文件
-.DS_Store
-Thumbs.db
+# 测试和覆盖率
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
 
 # 备份文件
 *.bak
 *.backup
+backups/
+*.tar.gz
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# 抓包相关（包含敏感信息）
+*.pcap
+*.har
+
+# 测试文件
+test_*.py
+*_test.py
+debug_*.py

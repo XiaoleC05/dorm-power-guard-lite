@@ -12,19 +12,34 @@
       </template>
       
       <el-table :data="logs" v-loading="loading" stripe>
-        <el-table-column prop="dorm_number" label="宿舍号" width="120" />
-        <el-table-column prop="balance" label="余额（元）" width="120" />
-        <el-table-column prop="threshold" label="阈值（元）" width="120" />
+        <el-table-column prop="dorm_number" label="宿舍号" width="100" />
+        <el-table-column prop="alert_category" label="类别" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.alert_category === 'ac' ? 'warning' : 'success'" size="small">
+              {{ row.alert_category === 'ac' ? '空调' : row.alert_category === 'light' ? '照明' : '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="balance" label="余量（度）" width="120">
+          <template #default="{ row }">
+            {{ row.balance.toFixed(2) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="threshold" label="阈值（度）" width="120">
+          <template #default="{ row }">
+            {{ row.threshold.toFixed(2) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="alert_type" label="告警类型" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.alert_type === 'email' ? 'primary' : 'success'">
+            <el-tag :type="row.alert_type === 'email' ? 'primary' : 'success'" size="small">
               {{ row.alert_type === 'email' ? '邮件' : 'QQ' }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="alert_status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.alert_status === 'success' ? 'success' : 'danger'">
+            <el-tag :type="row.alert_status === 'success' ? 'success' : 'danger'" size="small">
               {{ row.alert_status === 'success' ? '成功' : '失败' }}
             </el-tag>
           </template>

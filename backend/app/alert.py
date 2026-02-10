@@ -5,8 +5,11 @@ import smtplib
 import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict
+from email.mime.base import MIMEBase
+from email import encoders
+from typing import Optional, Dict, List
 from app.config import settings
+from app.templates import get_email_template, get_email_text_template
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,46 +27,102 @@ class EmailAlert:
         self.email_from = settings.EMAIL_FROM
         self.email_to = settings.EMAIL_TO.split(',') if settings.EMAIL_TO else []
     
-    def send(self, dorm_number: str, balance: float, threshold: float) -> bool:
-        """发送邮件告警"""
+    def send(self, dorm_number: str, category: str, category_name: str, 
+             balance: float, threshold: float, 
+             email_address: Optional[str] = None,
+             kbalance: Optional[float] = None,
+             zbalance: Optional[float] = None) -> bool:
+        """
+        发送邮件告警
+        
+        Args:
+            dorm_number: 宿舍号
+            category: 告警类别（ac/light）
+            category_name: 告警类别名称（空调/照明）
+            balance: 当前余量（度）
+            threshold: 告警阈值（度）
+            email_address: 接收邮箱地址（优先使用规则中的邮箱）
+            kbalance: 空调余量（度，可选）
+            zbalance: 照明余量（度，可选）
+        """
         if not self.enabled:
             logger.info("邮件告警未启用")
             return False
         
-        if not all([self.smtp_host, self.smtp_user, self.smtp_password, self.email_from, self.email_to]):
-            logger.error("邮件配置不完整")
+        # 确定接收邮箱
+        recipients = []
+        if email_address:
+            # 使用规则中配置的邮箱
+            recipients = [email.strip() for email in email_address.split(',') if email.strip()]
+        elif self.email_to:
+            # 使用全局配置的邮箱
+            recipients = self.email_to
+        
+        if not recipients:
+            logger.error("未配置接收邮箱地址")
+            return False
+        
+        if not all([self.smtp_host, self.smtp_user, self.smtp_password, self.email_from]):
+            logger.error("邮件SMTP配置不完整")
             return False
         
         try:
-            # 构建邮件内容
-            subject = f"【电费告警】宿舍 {dorm_number} 电费余额不足"
-            body = f"""
-            宿舍电费监控系统告警
+            # 使用模板生成邮件内容
+            subject, html_body = get_email_template(
+                dorm_number=dorm_number,
+                category=category,
+                category_name=category_name,
+                balance=balance,
+                threshold=threshold,
+                kbalance=kbalance,
+                zbalance=zbalance
+            )
             
-            宿舍号：{dorm_number}
-            当前余额：{balance} 元
-            告警阈值：{threshold} 元
+            # 生成纯文本版本（备用）
+            _, text_body = get_email_text_template(
+                dorm_number=dorm_number,
+                category=category,
+                category_name=category_name,
+                balance=balance,
+                threshold=threshold,
+                kbalance=kbalance,
+                zbalance=zbalance
+            )
             
-            请及时充值，避免停电影响生活。
-            """
-            
-            msg = MIMEMultipart()
+            # 构建邮件
+            msg = MIMEMultipart('alternative')
             msg['From'] = self.email_from
-            msg['To'] = ', '.join(self.email_to)
+            msg['To'] = ', '.join(recipients)
             msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+            
+            # 添加纯文本版本
+            text_part = MIMEText(text_body, 'plain', 'utf-8')
+            msg.attach(text_part)
+            
+            # 添加HTML版本
+            html_part = MIMEText(html_body, 'html', 'utf-8')
+            msg.attach(html_part)
             
             # 发送邮件
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
+            if self.smtp_port == 465:
+                # SSL端口，使用SMTP_SSL
+                server = smtplib.SMTP_SSL(self.smtp_host, self.smtp_port)
                 server.login(self.smtp_user, self.smtp_password)
-                server.send_message(msg)
+                server.sendmail(self.email_from, recipients, msg.as_string())
+                server.quit()
+            else:
+                # 普通端口，使用STARTTLS
+                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                    if self.smtp_port == 587:
+                        server.starttls()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.sendmail(self.email_from, recipients, msg.as_string())
             
-            logger.info(f"邮件告警发送成功：{dorm_number}, 余额 {balance} 元")
+            logger.info(f"邮件告警发送成功：{dorm_number}, {category_name}余量 {balance} 度, 发送至 {', '.join(recipients)}")
             return True
             
         except Exception as e:
-            logger.error(f"邮件告警发送失败：{e}")
+            logger.error(f"邮件告警发送失败：{e}", exc_info=True)
             return False
 
 
@@ -77,8 +136,22 @@ class QQBotAlert:
         self.user_id = settings.QQ_BOT_USER_ID
         self.bot_type = settings.QQ_BOT_TYPE
     
-    def send(self, dorm_number: str, balance: float, threshold: float) -> bool:
-        """发送QQ消息告警"""
+    def send(self, dorm_number: str, category: str, category_name: str,
+             balance: float, threshold: float,
+             kbalance: Optional[float] = None,
+             zbalance: Optional[float] = None) -> bool:
+        """
+        发送QQ消息告警
+        
+        Args:
+            dorm_number: 宿舍号
+            category: 告警类别（ac/light）
+            category_name: 告警类别名称（空调/照明）
+            balance: 当前余量（度）
+            threshold: 告警阈值（度）
+            kbalance: 空调余量（度，可选）
+            zbalance: 照明余量（度，可选）
+        """
         if not self.enabled:
             logger.info("QQ告警未启用")
             return False
@@ -88,7 +161,18 @@ class QQBotAlert:
             return False
         
         try:
-            message = f"【电费告警】\n宿舍：{dorm_number}\n当前余额：{balance} 元\n告警阈值：{threshold} 元\n请及时充值！"
+            message = f"【西华大学电费告警】\n"
+            message += f"宿舍：{dorm_number}\n"
+            message += f"告警类别：{category_name}\n"
+            message += f"当前余量：{balance:.2f} 度\n"
+            message += f"告警阈值：{threshold:.2f} 度\n"
+            if kbalance is not None:
+                message += f"空调余量：{kbalance:.2f} 度\n"
+            if zbalance is not None:
+                message += f"照明余量：{zbalance:.2f} 度\n"
+            message += f"\n请及时充值，避免停电影响正常生活！"
+            message += f"\n\n数据来源：西华大学一卡通宿舍用电小程序"
+            message += f"\n管理员QQ：714085964"
             
             # 根据不同的机器人类型调用不同的API
             if self.bot_type == "go-cqhttp":
@@ -115,7 +199,7 @@ class QQBotAlert:
                 if response.status_code == 200:
                     result = response.json()
                     if result.get("status") == "ok" or result.get("retcode") == 0:
-                        logger.info(f"QQ告警发送成功：{dorm_number}, 余额 {balance} 元")
+                        logger.info(f"QQ告警发送成功：{dorm_number}, {category_name}余量 {balance} 度")
                         return True
                     else:
                         logger.error(f"QQ告警发送失败：{result}")
@@ -145,19 +229,55 @@ class AlertManager:
         self.email_alert = EmailAlert()
         self.qq_alert = QQBotAlert()
     
-    def send_alert(self, dorm_number: str, balance: float, threshold: float, 
-                   email_enabled: bool = False, qq_enabled: bool = False) -> Dict[str, bool]:
+    def send_alert(self, dorm_number: str, category: str, category_name: str,
+                   balance: float, threshold: float,
+                   email_enabled: bool = False, 
+                   email_address: Optional[str] = None,
+                   qq_enabled: bool = False,
+                   kbalance: Optional[float] = None,
+                   zbalance: Optional[float] = None) -> Dict[str, bool]:
         """
         发送告警
-        返回：{'email': bool, 'qq': bool}
+        
+        Args:
+            dorm_number: 宿舍号
+            category: 告警类别（ac/light）
+            category_name: 告警类别名称（空调/照明）
+            balance: 当前余量（度）
+            threshold: 告警阈值（度）
+            email_enabled: 是否启用邮件告警
+            email_address: 接收邮箱地址
+            qq_enabled: 是否启用QQ告警
+            kbalance: 空调余量（度，可选）
+            zbalance: 照明余量（度，可选）
+        
+        Returns:
+            {'email': bool, 'qq': bool}
         """
         results = {'email': False, 'qq': False}
         
         if email_enabled:
-            results['email'] = self.email_alert.send(dorm_number, balance, threshold)
+            results['email'] = self.email_alert.send(
+                dorm_number=dorm_number,
+                category=category,
+                category_name=category_name,
+                balance=balance,
+                threshold=threshold,
+                email_address=email_address,
+                kbalance=kbalance,
+                zbalance=zbalance
+            )
         
         if qq_enabled:
-            results['qq'] = self.qq_alert.send(dorm_number, balance, threshold)
+            results['qq'] = self.qq_alert.send(
+                dorm_number=dorm_number,
+                category=category,
+                category_name=category_name,
+                balance=balance,
+                threshold=threshold,
+                kbalance=kbalance,
+                zbalance=zbalance
+            )
         
         return results
 

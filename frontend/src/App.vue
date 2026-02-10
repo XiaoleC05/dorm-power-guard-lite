@@ -2,7 +2,7 @@
   <el-container class="app-container">
     <el-header class="app-header">
       <div class="header-content">
-        <h1>宿舍电费监控系统</h1>
+        <h1>西华大学宿舍电费监控系统</h1>
         <el-menu
           mode="horizontal"
           :default-active="activeMenu"

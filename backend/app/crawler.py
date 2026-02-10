@@ -1,260 +1,242 @@
 """
-电费数据爬虫模块 - 针对微信小程序API抓取
+电费数据爬虫模块 - 西华大学一卡通宿舍用电小程序
+
+本模块用于抓取西华大学一卡通系统的宿舍电费数据。
+管理员QQ：714085964
 """
 import requests
-from bs4 import BeautifulSoup
 from typing import Optional, Dict
 from app.config import settings
+from app.auth_manager import AuthManager
 import logging
 import json
-import re
+import urllib3
+
+# 禁用SSL警告（仅用于开发环境）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
 
 class PowerCrawler:
-    """电费爬虫类 - 支持小程序API调用"""
+    """电费爬虫类 - 西华大学电费查询系统"""
     
-    def __init__(self):
+    def __init__(self, auto_refresh_auth: bool = True):
+        """
+        初始化爬虫
+        
+        Args:
+            auto_refresh_auth: 是否自动刷新认证信息（默认True）
+        """
         self.base_url = settings.CRAWLER_BASE_URL or "https://ecard.xhu.edu.cn"
-        self.api_base_url = settings.CRAWLER_API_BASE_URL or f"{self.base_url}/api"
-        self.token = settings.CRAWLER_TOKEN
-        self.username = settings.CRAWLER_USERNAME
-        self.password = settings.CRAWLER_PASSWORD
-        self.dorm_number = settings.CRAWLER_DORM_NUMBER
-        self.token_refresh_url = settings.CRAWLER_TOKEN_REFRESH_URL
+        self.room_id = settings.CRAWLER_ROOM_ID
+        self.area_id = settings.CRAWLER_AREA_ID or "1"
+        self.yq_id = settings.CRAWLER_YQ_ID or "3"
+        self.building_id = settings.CRAWLER_BUILDING_ID or "40-1"
+        self.floor_id = settings.CRAWLER_FLOOR_ID or "3"
+        self.factory_code = settings.CRAWLER_FACTORY_CODE or "E014"
+        self.sign = settings.CRAWLER_SIGN or "qt"
+        self.org_id = settings.CRAWLER_ORG_ID or "2"
+        self.dorm_number = settings.CRAWLER_DORM_NUMBER or "320"
+        
+        # 认证管理器
+        self.auth_manager = AuthManager()
+        
+        # 自动获取认证信息（方案一：模拟小程序首次访问）
+        if auto_refresh_auth:
+            self.openid, self.jsessionid = self._auto_get_auth()
+        else:
+            # 使用配置中的认证信息
+            self.openid = settings.CRAWLER_OPENID
+            self.jsessionid = settings.CRAWLER_JSESSIONID
         
         self.session = requests.Session()
-        # 模拟小程序请求头
+        # 设置请求头（模拟微信小程序）
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/78.0.3904.108 Mobile Safari/537.36 MicroMessenger/7.0.20.1781',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Content-Type': 'application/json',
+            'Host': 'ecard.xhu.edu.cn',
+            'isWechatApp': 'true',
+            'sec-ch-ua-platform': '"Android"',
+            'session-type': 'uniapp',
+            'sec-ch-ua': '"Chromium";v="142", "Android WebView";v="142", "Not_A Brand";v="99"',
+            'sec-ch-ua-mobile': '?1',
+            'x-requested-with': 'XMLHttpRequest',
+            'orgid': self.org_id,
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 16; V2408A Build/BQ2A.250705.001-BP2A.250605.031.A3_V000L1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/142.0.7444.173 Mobile Safari/537.36 XWEB/1420229 MMWEBSDK/20260101 MMWEBID/6740 REV/04f9d4e638f33b1909b8f293dffa1cf978d8d0a3 MicroMessenger/8.0.68.3020(0x28004458) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64',
+            'content-type': 'application/json',
+            'Accept': '*/*',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Dest': 'empty',
             'Referer': f'{self.base_url}/',
-            'Origin': self.base_url
+            'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
         })
         
-        # 如果有token，设置认证头
-        if self.token:
-            self.session.headers.update({
-                'Authorization': f'Bearer {self.token}',
-                # 或者可能是其他格式，如：
-                # 'token': self.token,
-                # 'X-Auth-Token': self.token,
-            })
+        # 设置Cookie
+        if self.jsessionid:
+            self.session.cookies.set('JSESSIONID', self.jsessionid)
+    
+    def _auto_get_auth(self) -> tuple[Optional[str], Optional[str]]:
+        """
+        自动获取认证信息（方案一：模拟小程序首次访问）
+        
+        Returns:
+            (openid, jsessionid) 元组
+        """
+        logger.info("正在自动获取认证信息（方案一：模拟小程序首次访问）...")
+        openid, jsessionid = self.auth_manager.auto_get_auth()
+        
+        if openid and jsessionid:
+            logger.info("成功自动获取认证信息")
+            logger.debug(f"OpenID: {openid[:30]}...")
+            logger.debug(f"JSESSIONID: {jsessionid[:20]}...")
+        elif openid:
+            logger.warning("已获取openid，但未能自动获取JSESSIONID，将使用配置中的JSESSIONID")
+            jsessionid = settings.CRAWLER_JSESSIONID
+        else:
+            logger.warning("未能自动获取认证信息，将使用配置中的认证信息")
+            openid = settings.CRAWLER_OPENID
+            jsessionid = settings.CRAWLER_JSESSIONID
+        
+        return openid, jsessionid
     
     def login(self) -> bool:
         """
-        登录系统（小程序场景）
-        对于微信小程序，通常使用Token认证，不需要传统登录
-        如果配置了Token，直接返回True
-        如果没有Token，尝试通过账号密码获取Token
+        登录验证（西华大学系统使用openid和JSESSIONID认证）
+        如果认证信息无效，自动尝试刷新JSESSIONID
         """
-        # 如果已有Token，验证Token是否有效
-        if self.token:
-            logger.info("使用配置的Token进行认证")
-            # 可以尝试调用一个简单的API验证Token
-            return self._verify_token()
-        
-        # 如果没有Token，尝试通过账号密码获取
-        if self.username and self.password:
-            logger.info(f"尝试通过账号密码获取Token：{self.username}")
-            return self._get_token_by_login()
-        
-        logger.error("未配置Token或账号密码，无法登录")
-        return False
-    
-    def _verify_token(self) -> bool:
-        """验证Token是否有效"""
-        try:
-            # 尝试调用一个简单的API接口验证Token
-            # 这里需要根据实际API调整
-            test_url = f"{self.api_base_url}/user/info"  # 示例接口
-            response = self.session.get(test_url, timeout=10)
-            
-            if response.status_code == 200:
-                logger.info("Token验证成功")
-                return True
-            elif response.status_code == 401:
-                logger.warning("Token已过期，需要刷新")
-                return self._refresh_token()
-            else:
-                logger.warning(f"Token验证失败，状态码：{response.status_code}")
-                return False
-        except Exception as e:
-            logger.error(f"Token验证异常：{e}")
+        if not self.openid:
+            logger.error("未配置openid，无法登录")
             return False
-    
-    def _get_token_by_login(self) -> bool:
-        """
-        通过账号密码获取Token
-        注意：微信小程序通常不支持账号密码登录，这个方法可能需要根据实际情况调整
-        """
-        try:
-            # 示例：调用登录API获取Token
-            login_url = f"{self.api_base_url}/auth/login"
-            login_data = {
-                'username': self.username,
-                'password': self.password
-            }
-            
-            response = self.session.post(login_url, json=login_data, timeout=10)
-            
-            if response.status_code == 200:
-                result = response.json()
-                # 根据实际API响应格式提取Token
-                # 可能的格式：
-                # - result['data']['token']
-                # - result['token']
-                # - result['access_token']
-                token = result.get('data', {}).get('token') or result.get('token')
-                
-                if token:
-                    self.token = token
-                    self.session.headers.update({'Authorization': f'Bearer {token}'})
-                    logger.info("登录成功，已获取Token")
+        
+        # 验证当前认证信息是否有效
+        if self.jsessionid:
+            if self.auth_manager.verify_auth(self.openid, self.jsessionid):
+                logger.info("认证信息有效，登录成功")
+                return True
+            else:
+                logger.warning("当前JSESSIONID可能已过期，尝试自动刷新...")
+                # 自动刷新JSESSIONID
+                new_jsessionid = self.auth_manager.refresh_jsessionid()
+                if new_jsessionid:
+                    self.jsessionid = new_jsessionid
+                    self.session.cookies.set('JSESSIONID', self.jsessionid)
+                    logger.info("成功刷新JSESSIONID")
                     return True
                 else:
-                    logger.error("登录响应中未找到Token")
+                    logger.error("自动刷新JSESSIONID失败")
                     return False
+        else:
+            # 如果没有JSESSIONID，尝试自动获取
+            logger.info("未配置JSESSIONID，尝试自动获取...")
+            new_jsessionid = self.auth_manager.get_new_session(self.openid)
+            if new_jsessionid:
+                self.jsessionid = new_jsessionid
+                self.session.cookies.set('JSESSIONID', self.jsessionid)
+                logger.info("成功自动获取JSESSIONID")
+                return True
             else:
-                logger.error(f"登录失败，状态码：{response.status_code}, 响应：{response.text}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"登录异常：{e}")
-            return False
-    
-    def _refresh_token(self) -> bool:
-        """刷新Token"""
-        if not self.token_refresh_url:
-            logger.warning("未配置Token刷新URL，无法刷新Token")
-            return False
-        
-        try:
-            response = self.session.post(self.token_refresh_url, timeout=10)
-            if response.status_code == 200:
-                result = response.json()
-                new_token = result.get('data', {}).get('token') or result.get('token')
-                if new_token:
-                    self.token = new_token
-                    self.session.headers.update({'Authorization': f'Bearer {new_token}'})
-                    logger.info("Token刷新成功")
-                    return True
-            return False
-        except Exception as e:
-            logger.error(f"Token刷新失败：{e}")
-            return False
+                logger.warning("未能自动获取JSESSIONID，可能会影响请求")
+                return True  # 仍然尝试继续（某些API可能不需要JSESSIONID）
     
     def fetch_power_data(self) -> Optional[Dict]:
         """
-        抓取电费数据（小程序API方式）
+        抓取电费数据
         返回格式：{
             'dorm_number': '宿舍号',
-            'balance': 余额（元）,
-            'power_consumption': 用电量（度，可选）
+            'balance': 余量（度，优先返回空调余量）,
+            'kbalance': 空调余量（度）,
+            'zbalance': 照明余量（度）,
+            'power_consumption': 用电量（度，已废弃）
         }
+        注意：用电量差值（kpower_consumption和zpower_consumption）在保存时自动计算
         """
         if not self.login():
             logger.error("登录失败，无法抓取数据")
             return None
         
+        if not self.room_id:
+            logger.error("未配置房间ID（CRAWLER_ROOM_ID），无法查询电费")
+            return None
+        
         try:
-            logger.info(f"开始抓取宿舍 {self.dorm_number} 的电费数据")
+            logger.info(f"开始抓取房间 {self.dorm_number} (roomid={self.room_id}) 的电费数据")
             
-            # 方式1：直接调用小程序API（推荐）
-            # 需要根据实际API接口调整URL和参数
-            api_url = f"{self.api_base_url}/power/query"
+            # 调用querySydl API查询电费
+            api_url = f"{self.base_url}/channel/querySydl"
             
-            # 可能的API调用方式：
-            # 1. GET请求带参数
             params = {
-                'dorm': self.dorm_number,
-                # 或其他参数名，如：'room', 'roomNumber', 'dormNumber'
+                'areaid': self.area_id,
+                'yqid': self.yq_id,
+                'buildingid': self.building_id,
+                'floorid': self.floor_id,
+                'roomid': self.room_id,
+                'factorycode': self.factory_code,
+                'sign': self.sign,
+                'openid': self.openid,
+                'orgid': self.org_id,
             }
-            response = self.session.get(api_url, params=params, timeout=15)
             
-            # 2. 如果是POST请求
-            # data = {'dorm_number': self.dorm_number}
-            # response = self.session.post(api_url, json=data, timeout=15)
+            logger.debug(f"请求URL: {api_url}")
+            logger.debug(f"请求参数: {params}")
             
+            # 禁用SSL验证（仅用于开发环境，生产环境应配置正确的证书）
+            response = self.session.get(api_url, params=params, timeout=15, verify=False)
             response.raise_for_status()
             
             # 解析JSON响应
             result = response.json()
+            logger.debug(f"API响应: {json.dumps(result, ensure_ascii=False, indent=2)}")
             
-            # 根据实际API响应格式提取数据
-            # 可能的响应格式示例：
-            # {
-            #   "code": 200,
-            #   "data": {
-            #     "balance": 50.0,
-            #     "power": 100.5,
-            #     "dorm": "101"
-            #   }
-            # }
-            
-            # 提取数据（需要根据实际响应结构调整）
-            data = result.get('data', result)  # 有些API直接返回数据，有些在data字段中
-            
-            balance = self._extract_balance(data)
-            power_consumption = self._extract_power_consumption(data)
-            
-            if balance is None:
-                logger.error("未能从API响应中提取到余额信息")
-                logger.debug(f"API响应：{json.dumps(result, ensure_ascii=False, indent=2)}")
+            # 检查响应是否成功
+            if not result.get('success', False):
+                error_msg = result.get('message', '未知错误')
+                logger.error(f"API返回失败: {error_msg}")
                 return None
+            
+            # 提取数据
+            result_data = result.get('resultData', {})
+            balance_list = result_data.get('balancelist', [])
+            
+            if not balance_list:
+                logger.error("响应中未找到余额数据")
+                return None
+            
+            # 获取第一条余额记录（通常只有一条）
+            balance_info = balance_list[0]
+            
+            # 提取空调余额和照明余额
+            kbalance_str = balance_info.get('kbalance', '0')  # 空调余额
+            zbalance_str = balance_info.get('zbalance', '0')  # 照明余额
+            
+            # 转换为浮点数
+            try:
+                kbalance = float(kbalance_str)
+                zbalance = float(zbalance_str)
+            except (ValueError, TypeError) as e:
+                logger.error(f"余额格式转换失败: {e}")
+                return None
+            
+            # 优先返回空调余额（根据用户需求）
+            balance = kbalance
+            
+            logger.info(f"成功获取电费数据 - 空调余量: {kbalance}度, 照明余量: {zbalance}度")
             
             return {
                 'dorm_number': self.dorm_number,
-                'balance': balance,
-                'power_consumption': power_consumption
+                'balance': balance,  # 空调余额（主要监控项）
+                'kbalance': kbalance,  # 空调余额
+                'zbalance': zbalance,  # 照明余额
+                'power_consumption': None  # 用电量（如果API有提供）
             }
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"API请求失败：{e}")
+            logger.error(f"API请求失败: {e}")
             if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"响应内容：{e.response.text}")
+                logger.error(f"响应内容: {e.response.text}")
             return None
         except Exception as e:
-            logger.error(f"抓取电费数据失败：{e}", exc_info=True)
+            logger.error(f"抓取电费数据失败: {e}", exc_info=True)
             return None
-    
-    def _extract_balance(self, data: Dict) -> Optional[float]:
-        """从响应数据中提取余额"""
-        # 尝试多种可能的字段名
-        balance_keys = ['balance', '余额', 'amount', 'money', 'fee', 'remaining', 'remain']
-        
-        for key in balance_keys:
-            if key in data:
-                value = data[key]
-                # 转换为浮点数
-                if isinstance(value, (int, float)):
-                    return float(value)
-                elif isinstance(value, str):
-                    # 提取数字（去除"元"等字符）
-                    numbers = re.findall(r'\d+\.?\d*', value.replace(',', ''))
-                    if numbers:
-                        return float(numbers[0])
-        
-        return None
-    
-    def _extract_power_consumption(self, data: Dict) -> Optional[float]:
-        """从响应数据中提取用电量"""
-        power_keys = ['power', 'powerConsumption', 'consumption', '用电量', '电量', 'kwh']
-        
-        for key in power_keys:
-            if key in data:
-                value = data[key]
-                if isinstance(value, (int, float)):
-                    return float(value)
-                elif isinstance(value, str):
-                    numbers = re.findall(r'\d+\.?\d*', value.replace(',', ''))
-                    if numbers:
-                        return float(numbers[0])
-        
-        return None
     
     def test_connection(self) -> bool:
         """测试连接"""
@@ -264,7 +246,7 @@ class PowerCrawler:
             response = self.session.get(self.base_url, timeout=10)
             return response.status_code == 200
         except Exception as e:
-            logger.error(f"连接测试失败：{e}")
+            logger.error(f"连接测试失败: {e}")
             return False
 
 

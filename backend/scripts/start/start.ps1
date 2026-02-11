@@ -6,6 +6,11 @@ Write-Host "宿舍电费监控系统 - 启动脚本" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# 切换到backend目录
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$backendDir = Join-Path $scriptDir "..\.."
+Set-Location $backendDir
+
 # 检查.env文件是否存在
 if (-not (Test-Path .env)) {
     Write-Host "[警告] 未找到 .env 文件" -ForegroundColor Yellow

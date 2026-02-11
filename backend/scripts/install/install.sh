@@ -5,6 +5,9 @@ echo "宿舍电费监控系统 - 依赖安装脚本"
 echo "========================================"
 echo ""
 
+# 切换到backend目录
+cd "$(dirname "$0")/../.."
+
 # 检查Python是否安装
 if ! command -v python3 &> /dev/null; then
     echo "[错误] 未检测到Python3，请先安装Python 3.8+"

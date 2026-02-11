@@ -15,8 +15,7 @@ if (-not $isAdmin) {
 
 # 获取脚本所在目录
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$backendDir = $scriptDir
-$projectRoot = Split-Path -Parent $backendDir
+$backendDir = Join-Path $scriptDir "..\.."
 
 # 检查NSSM
 $nssmPath = "nssm.exe"

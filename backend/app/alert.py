@@ -24,8 +24,7 @@ class EmailAlert:
         self.smtp_port = settings.EMAIL_SMTP_PORT
         self.smtp_user = settings.EMAIL_SMTP_USER
         self.smtp_password = settings.EMAIL_SMTP_PASSWORD
-        self.email_from = settings.EMAIL_FROM
-        self.email_to = settings.EMAIL_TO.split(',') if settings.EMAIL_TO else []
+        self.email_from = settings.EMAIL_FROM  # 发送方邮箱（全局配置）
     
     def send(self, dorm_number: str, category: str, category_name: str, 
              balance: float, threshold: float, 
@@ -49,17 +48,14 @@ class EmailAlert:
             logger.info("邮件告警未启用")
             return False
         
-        # 确定接收邮箱
+        # 确定接收邮箱：必须使用规则中配置的邮箱，不能使用全局配置
         recipients = []
         if email_address:
             # 使用规则中配置的邮箱
             recipients = [email.strip() for email in email_address.split(',') if email.strip()]
-        elif self.email_to:
-            # 使用全局配置的邮箱
-            recipients = self.email_to
         
         if not recipients:
-            logger.error("未配置接收邮箱地址")
+            logger.error("未配置接收邮箱地址（必须在前端告警规则中填入接收邮箱）")
             return False
         
         if not all([self.smtp_host, self.smtp_user, self.smtp_password, self.email_from]):
@@ -132,14 +128,14 @@ class QQBotAlert:
     def __init__(self):
         self.enabled = settings.QQ_BOT_ENABLED
         self.api_url = settings.QQ_BOT_API_URL
-        self.group_id = settings.QQ_BOT_GROUP_ID
-        self.user_id = settings.QQ_BOT_USER_ID
-        self.bot_type = settings.QQ_BOT_TYPE
+        # 注意：不再使用全局配置的 group_id 和 user_id 作为接收方
+        # 接收方必须从告警规则中获取（qq_receiver_id）
     
     def send(self, dorm_number: str, category: str, category_name: str,
              balance: float, threshold: float,
              kbalance: Optional[float] = None,
-             zbalance: Optional[float] = None) -> bool:
+             zbalance: Optional[float] = None,
+             qq_receiver_id: Optional[str] = None) -> bool:
         """
         发送QQ消息告警
         
@@ -151,75 +147,140 @@ class QQBotAlert:
             threshold: 告警阈值（度）
             kbalance: 空调余量（度，可选）
             zbalance: 照明余量（度，可选）
+            qq_receiver_id: QQ接收者ID（群号或用户QQ号，可选，优先使用此参数）
+        
+        Returns:
+            bool: 发送是否成功
         """
         if not self.enabled:
-            logger.info("QQ告警未启用")
+            logger.debug("QQ告警未启用（全局配置）")
             return False
         
         if not self.api_url:
             logger.error("QQ机器人API地址未配置")
             return False
         
-        try:
-            message = f"【西华大学电费告警】\n"
-            message += f"宿舍：{dorm_number}\n"
-            message += f"告警类别：{category_name}\n"
-            message += f"当前余量：{balance:.2f} 度\n"
-            message += f"告警阈值：{threshold:.2f} 度\n"
-            if kbalance is not None:
-                message += f"空调余量：{kbalance:.2f} 度\n"
-            if zbalance is not None:
-                message += f"照明余量：{zbalance:.2f} 度\n"
-            message += f"\n请及时充值，避免停电影响正常生活！"
-            message += f"\n\n数据来源：西华大学一卡通宿舍用电小程序"
-            message += f"\n管理员QQ：714085964"
-            
-            # 根据不同的机器人类型调用不同的API
-            if self.bot_type == "go-cqhttp":
-                # go-cqhttp API格式
-                if self.group_id:
-                    # 发送到群
-                    url = f"{self.api_url}/send_group_msg"
-                    data = {
-                        "group_id": int(self.group_id),
-                        "message": message
-                    }
-                elif self.user_id:
-                    # 发送到私聊
-                    url = f"{self.api_url}/send_private_msg"
-                    data = {
-                        "user_id": int(self.user_id),
-                        "message": message
-                    }
-                else:
-                    logger.error("QQ群号或用户ID未配置")
-                    return False
-                
-                response = requests.post(url, json=data, timeout=10)
-                if response.status_code == 200:
-                    result = response.json()
-                    if result.get("status") == "ok" or result.get("retcode") == 0:
-                        logger.info(f"QQ告警发送成功：{dorm_number}, {category_name}余量 {balance} 度")
-                        return True
-                    else:
-                        logger.error(f"QQ告警发送失败：{result}")
-                        return False
-                else:
-                    logger.error(f"QQ告警API请求失败：{response.status_code}")
-                    return False
-            
-            elif self.bot_type == "nonebot":
-                # NoneBot API格式（需要根据实际API调整）
-                logger.warning("NoneBot告警需要根据实际API实现")
-                return False
-            
-            else:
-                logger.error(f"不支持的QQ机器人类型：{self.bot_type}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"QQ告警发送失败：{e}")
+        # 确定接收QQ号：必须使用规则中配置的qq_receiver_id，不能使用全局配置
+        if not qq_receiver_id:
+            logger.error("未配置接收QQ号或群号（必须在前端告警规则中填入接收QQ号或群号）")
             return False
+        
+        receiver_id = qq_receiver_id
+        
+        try:
+            # 构建告警消息
+            message = self._build_message(dorm_number, category_name, balance, threshold, kbalance, zbalance)
+            
+            # 判断是群号还是用户QQ号（群号通常较大，用户QQ号通常较小）
+            # 如果qq_receiver_id是数字且大于1000000000，认为是群号；否则认为是用户QQ号
+            try:
+                receiver_num = int(receiver_id)
+                # 使用规则中配置的qq_receiver_id
+                if receiver_num >= 1000000000:
+                    # 群号（大于1000000000），发送群消息
+                    url = f"{self.api_url}/api/send_group_msg"
+                    data = {
+                        "group_id": receiver_num,
+                        "message": message
+                    }
+                    target_info = f"群 {receiver_id}"
+                else:
+                    # 用户QQ号，发送私聊
+                    url = f"{self.api_url}/api/send_private_msg"
+                    data = {
+                        "user_id": receiver_num,
+                        "message": message
+                    }
+                    target_info = f"用户 {receiver_id}"
+            except ValueError:
+                logger.error(f"QQ接收者ID格式错误：{receiver_id}")
+                return False
+            
+            # 准备请求头
+            headers = {
+                "Content-Type": "application/json"
+            }
+            if hasattr(settings, 'QQ_BOT_ACCESS_TOKEN') and settings.QQ_BOT_ACCESS_TOKEN:
+                headers["Authorization"] = f"Bearer {settings.QQ_BOT_ACCESS_TOKEN}"
+            
+            # 发送请求
+            logger.info(f"正在发送QQ告警到{target_info}：{dorm_number}, {category_name}余量 {balance:.2f} 度")
+            response = requests.post(url, json=data, headers=headers, timeout=10)
+            
+            # 处理响应
+            if response.status_code == 200:
+                result = response.json()
+                # OneBot 协议返回格式：{"status": "ok", "retcode": 0, "data": {...}}
+                if result.get("status") == "ok" or result.get("retcode") == 0:
+                    logger.info(f"QQ告警发送成功：{dorm_number}, {category_name}余量 {balance:.2f} 度 -> {target_info}")
+                    return True
+                else:
+                    error_msg = result.get("msg", str(result))
+                    # 特殊处理：如果返回 "There are no bots to get"，说明NapCatQQ未连接
+                    if "no bots" in error_msg.lower() or "There are no bots" in error_msg:
+                        error_msg = "NoneBot未连接NapCatQQ，请启动NapCatQQ并连接到NoneBot"
+                    logger.error(f"QQ告警发送失败（API返回错误）：{error_msg}")
+                    return False
+            else:
+                error_text = response.text[:200]  # 限制错误信息长度
+                logger.error(f"QQ告警API请求失败：HTTP {response.status_code}, 响应：{error_text}")
+                return False
+                
+        except requests.exceptions.Timeout:
+            logger.error(f"QQ告警发送超时：{dorm_number}, {category_name}")
+            return False
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"QQ告警连接失败：NoneBot可能未运行或NapCatQQ未连接。错误：{str(e)}"
+            logger.error(error_msg)
+            return False
+        except Exception as e:
+            logger.error(f"QQ告警发送失败：{dorm_number}, {category_name}, 错误：{e}", exc_info=True)
+            return False
+    
+    def _build_message(self, dorm_number: str, category_name: str, balance: float, 
+                      threshold: float, kbalance: Optional[float] = None, 
+                      zbalance: Optional[float] = None) -> str:
+        """
+        构建告警消息
+        
+        Args:
+            dorm_number: 宿舍号
+            category_name: 告警类别名称（空调/照明）
+            balance: 当前余量（度）
+            threshold: 告警阈值（度）
+            kbalance: 空调余量（度，可选）
+            zbalance: 照明余量（度，可选）
+        
+        Returns:
+            str: 格式化后的告警消息
+        """
+        message = f"【西华大学电费告警】\n"
+        message += f"━━━━━━━━━━━━━━━━━━\n"
+        message += f"宿舍号：{dorm_number}\n"
+        message += f"告警类别：{category_name}\n"
+        message += f"当前余量：{balance:.2f} 度\n"
+        message += f"告警阈值：{threshold:.2f} 度\n"
+        
+        # 显示完整余量信息
+        if kbalance is not None or zbalance is not None:
+            message += f"\n【完整余量信息】\n"
+            if kbalance is not None:
+                message += f"  空调余量：{kbalance:.2f} 度"
+                if kbalance < threshold:
+                    message += " ⚠️"
+                message += "\n"
+            if zbalance is not None:
+                message += f"  照明余量：{zbalance:.2f} 度"
+                if zbalance < threshold:
+                    message += " ⚠️"
+                message += "\n"
+        
+        message += f"\n⚠️ 请及时充值，避免停电影响正常生活！\n"
+        message += f"━━━━━━━━━━━━━━━━━━\n"
+        message += f"数据来源：西华大学一卡通宿舍用电小程序\n"
+        message += f"管理员QQ：714085964"
+        
+        return message
 
 
 class AlertManager:
@@ -234,6 +295,7 @@ class AlertManager:
                    email_enabled: bool = False, 
                    email_address: Optional[str] = None,
                    qq_enabled: bool = False,
+                   qq_receiver_id: Optional[str] = None,
                    kbalance: Optional[float] = None,
                    zbalance: Optional[float] = None) -> Dict[str, bool]:
         """
@@ -248,36 +310,48 @@ class AlertManager:
             email_enabled: 是否启用邮件告警
             email_address: 接收邮箱地址
             qq_enabled: 是否启用QQ告警
+            qq_receiver_id: QQ接收者ID（群号或用户QQ号，可选）
             kbalance: 空调余量（度，可选）
             zbalance: 照明余量（度，可选）
         
         Returns:
-            {'email': bool, 'qq': bool}
+            {'email': bool, 'qq': bool} - 发送结果字典
         """
         results = {'email': False, 'qq': False}
         
+        # 发送邮件告警
         if email_enabled:
-            results['email'] = self.email_alert.send(
-                dorm_number=dorm_number,
-                category=category,
-                category_name=category_name,
-                balance=balance,
-                threshold=threshold,
-                email_address=email_address,
-                kbalance=kbalance,
-                zbalance=zbalance
-            )
+            try:
+                results['email'] = self.email_alert.send(
+                    dorm_number=dorm_number,
+                    category=category,
+                    category_name=category_name,
+                    balance=balance,
+                    threshold=threshold,
+                    email_address=email_address,
+                    kbalance=kbalance,
+                    zbalance=zbalance
+                )
+            except Exception as e:
+                logger.error(f"邮件告警发送异常：{e}", exc_info=True)
+                results['email'] = False
         
+        # 发送QQ告警
         if qq_enabled:
-            results['qq'] = self.qq_alert.send(
-                dorm_number=dorm_number,
-                category=category,
-                category_name=category_name,
-                balance=balance,
-                threshold=threshold,
-                kbalance=kbalance,
-                zbalance=zbalance
-            )
+            try:
+                results['qq'] = self.qq_alert.send(
+                    dorm_number=dorm_number,
+                    category=category,
+                    category_name=category_name,
+                    balance=balance,
+                    threshold=threshold,
+                    kbalance=kbalance,
+                    zbalance=zbalance,
+                    qq_receiver_id=qq_receiver_id
+                )
+            except Exception as e:
+                logger.error(f"QQ告警发送异常：{e}", exc_info=True)
+                results['qq'] = False
         
         return results
 

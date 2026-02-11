@@ -51,12 +51,13 @@ class Settings(BaseSettings):
     EMAIL_FROM: Optional[str] = None
     EMAIL_TO: Optional[str] = None  # 多个邮箱用逗号分隔
     
-    # QQ机器人配置
+    # QQ机器人配置（NoneBot）
     QQ_BOT_ENABLED: bool = False
-    QQ_BOT_TYPE: Optional[str] = None  # go-cqhttp, nonebot等
-    QQ_BOT_API_URL: Optional[str] = None  # QQ机器人API地址
-    QQ_BOT_GROUP_ID: Optional[str] = None  # 群号
-    QQ_BOT_USER_ID: Optional[str] = None  # 用户QQ号
+    QQ_BOT_API_URL: Optional[str] = None  # NoneBot HTTP API地址（默认：http://localhost:8080）
+    QQ_BOT_GROUP_ID: Optional[str] = None  # QQ群号（发送到群，默认值）
+    QQ_BOT_USER_ID: Optional[str] = None  # QQ用户号（发送到私聊，默认值）
+    QQ_BOT_SENDER_ID: Optional[str] = None  # 发送方QQ号（机器人QQ号，默认：1270667498）
+    QQ_BOT_ACCESS_TOKEN: Optional[str] = None  # API访问令牌（如果NoneBot配置了access_token）
     
     # 默认告警阈值
     DEFAULT_ALERT_THRESHOLD: float = 20.0  # 默认余额低于20元时告警

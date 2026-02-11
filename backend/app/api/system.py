@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services import CrawlerService
+from app.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,20 @@ async def manual_crawl(db: Session = Depends(get_db)):
                 "message": "数据获取失败，请检查网络连接和认证信息"
             }
     except Exception as e:
-        logger.error(f"手动触发爬虫任务异常：{e}")
+        import traceback
+        logger.error(f"手动触发爬虫任务异常：{e}", exc_info=True)
+        logger.error(f"详细错误信息：{traceback.format_exc()}")
         return {
             "success": False,
             "message": f"数据获取异常：{str(e)}"
         }
+
+
+@router.get("/qq-config", summary="获取QQ机器人全局配置")
+async def get_qq_config():
+    """获取QQ机器人全局配置（群号和用户QQ号）"""
+    return {
+        "group_id": settings.QQ_BOT_GROUP_ID,
+        "user_id": settings.QQ_BOT_USER_ID,
+        "enabled": settings.QQ_BOT_ENABLED
+    }

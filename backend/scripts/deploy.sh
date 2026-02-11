@@ -14,6 +14,11 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# 获取脚本所在目录
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$BACKEND_DIR"
+
 # 安装依赖
 echo "1. 安装系统依赖..."
 apt update
@@ -21,7 +26,6 @@ apt install -y python3 python3-pip git mysql-server nginx
 
 # 安装Python依赖
 echo "2. 安装Python依赖..."
-cd backend
 pip3 install -r requirements.txt
 
 # 配置MySQL
@@ -55,9 +59,9 @@ After=network.target mysql.service
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=$(pwd)
+WorkingDirectory=$BACKEND_DIR
 Environment="PATH=/usr/bin:/usr/local/bin"
-ExecStart=/usr/bin/python3 $(pwd)/run.py
+ExecStart=/usr/bin/python3 $BACKEND_DIR/run.py
 Restart=always
 RestartSec=10
 

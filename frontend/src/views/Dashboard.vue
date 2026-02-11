@@ -1,40 +1,72 @@
 <template>
   <div class="dashboard">
-    <!-- 余量卡片 -->
-    <el-row :gutter="20">
-      <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="latestRecord">
-        <el-card class="balance-card" shadow="hover">
-          <div class="balance-header">
-            <div class="balance-icon ac-icon">
-              <el-icon><WindPower /></el-icon>
+    <!-- 多个宿舍信息卡片 -->
+    <el-row :gutter="20" v-if="dormRecords.length > 0">
+      <el-col 
+        :xs="24" 
+        :sm="12" 
+        :md="8" 
+        :lg="6" 
+        v-for="record in dormRecords" 
+        :key="record.dorm_number"
+        style="margin-bottom: 20px;"
+      >
+        <el-card class="dorm-card" shadow="hover">
+          <template #header>
+            <div class="dorm-header">
+              <el-tag type="info" size="large">{{ record.dorm_number }}</el-tag>
+              <el-tag 
+                :type="getDormStatusType(record)" 
+                size="small"
+                style="margin-left: 8px;"
+              >
+                {{ getDormStatusText(record) }}
+              </el-tag>
             </div>
-            <div class="balance-info">
-              <div class="balance-label">空调余量</div>
-              <div :class="['balance-value', getBalanceClass(latestRecord.kbalance || latestRecord.balance)]">
-                {{ latestRecord.kbalance !== null && latestRecord.kbalance !== undefined ? latestRecord.kbalance.toFixed(2) : latestRecord.balance.toFixed(2) }} 度
+          </template>
+          <div class="dorm-content">
+            <div class="dorm-balance-item" v-if="record.kbalance !== null && record.kbalance !== undefined">
+              <div class="balance-item-label">
+                <el-icon><WindPower /></el-icon>
+                <span>空调</span>
+              </div>
+              <div :class="['balance-item-value', getBalanceClass(record.kbalance)]">
+                {{ record.kbalance.toFixed(2) }} 度
               </div>
             </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="latestRecord && latestRecord.zbalance !== null && latestRecord.zbalance !== undefined">
-        <el-card class="balance-card" shadow="hover">
-          <div class="balance-header">
-            <div class="balance-icon light-icon">
-              <el-icon><Sunny /></el-icon>
-            </div>
-            <div class="balance-info">
-              <div class="balance-label">照明余量</div>
-              <div :class="['balance-value', getBalanceClass(latestRecord.zbalance)]">
-                {{ latestRecord.zbalance.toFixed(2) }} 度
+            <div class="dorm-balance-item" v-if="record.zbalance !== null && record.zbalance !== undefined">
+              <div class="balance-item-label">
+                <el-icon><Sunny /></el-icon>
+                <span>照明</span>
               </div>
+              <div :class="['balance-item-value', getBalanceClass(record.zbalance)]">
+                {{ record.zbalance.toFixed(2) }} 度
+              </div>
+            </div>
+            <div class="dorm-balance-item" v-if="record.kbalance === null && record.kbalance === undefined && record.balance !== null">
+              <div class="balance-item-label">
+                <el-icon><WindPower /></el-icon>
+                <span>余量</span>
+              </div>
+              <div :class="['balance-item-value', getBalanceClass(record.balance)]">
+                {{ record.balance.toFixed(2) }} 度
+              </div>
+            </div>
+            <div class="dorm-time" v-if="record.record_time">
+              <el-icon><Clock /></el-icon>
+              <span>{{ formatTime(record.record_time) }}</span>
             </div>
           </div>
         </el-card>
       </el-col>
     </el-row>
+    
+    <!-- 如果没有数据，显示空状态 -->
+    <el-empty v-if="dormRecords.length === 0 && !loading" description="暂无宿舍数据" :image-size="120">
+      <el-button type="primary" @click="reloadData">立即获取数据</el-button>
+    </el-empty>
 
-    <!-- 详细信息卡片 -->
+    <!-- 操作栏 -->
     <el-row :gutter="20" style="margin-top: 20px">
       <el-col :span="24">
         <el-card class="dashboard-card" shadow="hover">
@@ -42,7 +74,7 @@
             <div class="card-header">
               <div class="header-title">
                 <el-icon class="title-icon"><InfoFilled /></el-icon>
-                <span>详细信息</span>
+                <span>监控面板</span>
               </div>
               <div class="header-actions">
                 <el-button type="success" size="default" @click="reloadData" :loading="reloading" :icon="Refresh">
@@ -57,33 +89,22 @@
           <div v-if="loading" class="loading-container">
             <el-skeleton :rows="3" animated />
           </div>
-          <div v-else-if="latestRecord" class="status-content">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="宿舍号">
-                <el-tag type="info" size="large">{{ latestRecord.dorm_number }}</el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="记录时间">
-                <el-icon><Clock /></el-icon>
-                <span style="margin-left: 5px;">{{ formatTime(latestRecord.record_time) }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item label="空调余量">
-                <span :class="getBalanceClass(latestRecord.kbalance || latestRecord.balance)">
-                  {{ latestRecord.kbalance !== null && latestRecord.kbalance !== undefined ? latestRecord.kbalance.toFixed(2) : latestRecord.balance.toFixed(2) }} 度
-                </span>
-              </el-descriptions-item>
-              <el-descriptions-item label="照明余量" v-if="latestRecord.zbalance !== null && latestRecord.zbalance !== undefined">
-                <span :class="getBalanceClass(latestRecord.zbalance)">
-                  {{ latestRecord.zbalance.toFixed(2) }} 度
-                </span>
-              </el-descriptions-item>
-              <el-descriptions-item label="用电量" v-if="latestRecord.power_consumption">
-                <el-tag>{{ latestRecord.power_consumption }} 度</el-tag>
-              </el-descriptions-item>
-            </el-descriptions>
+          <div v-else class="status-content">
+            <el-alert
+              v-if="dormRecords.length === 0"
+              title="暂无数据"
+              description="请先添加告警规则，系统将自动监控这些宿舍的电费信息"
+              type="info"
+              :closable="false"
+              show-icon
+            />
+            <div v-else>
+              <el-statistic-group>
+                <el-statistic title="监控宿舍数" :value="dormRecords.length" />
+                <el-statistic title="有数据宿舍" :value="dormRecords.filter(r => r !== null).length" />
+              </el-statistic-group>
+            </div>
           </div>
-          <el-empty v-else description="暂无数据" :image-size="120">
-            <el-button type="primary" @click="reloadData">立即获取数据</el-button>
-          </el-empty>
         </el-card>
       </el-col>
     </el-row>
@@ -124,6 +145,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getLatestRecord, getRecords } from '../api/power'
 import { manualCrawl } from '../api/system'
+import { getAllAlertRules } from '../api/alert'
 import { usePowerStore } from '../stores/power'
 import * as echarts from 'echarts'
 import dayjs from 'dayjs'
@@ -133,6 +155,7 @@ const loading = ref(false)
 const chartLoading = ref(false)
 const reloading = ref(false)
 const latestRecord = ref(null)
+const dormRecords = ref([])
 const chartContainer = ref(null)
 let chartInstance = null
 
@@ -158,7 +181,7 @@ const formatTime = (time) => {
 }
 
 const refreshData = async () => {
-  await loadLatestRecord()
+  await loadDormRecords()
   await loadChartData()
 }
 
@@ -183,24 +206,60 @@ const reloadData = async () => {
   }
 }
 
-const loadLatestRecord = async () => {
+const loadDormRecords = async () => {
   loading.value = true
   try {
-    // 这里需要从配置或store获取宿舍号
-    const dormNumber = powerStore.dormNumber || '320'
-    const data = await getLatestRecord(dormNumber)
-    latestRecord.value = data
-  } catch (error) {
-    // 如果是404错误（没有数据），不显示错误提示，只清空数据
-    if (error.response?.status === 404) {
+    // 获取所有告警规则中的宿舍号
+    const rules = await getAllAlertRules()
+    const enabledRules = rules.filter(rule => rule.enabled)
+    
+    if (enabledRules.length === 0) {
+      dormRecords.value = []
       latestRecord.value = null
-      console.log('暂无电费记录数据')
-    } else {
-      ElMessage.error('获取数据失败：' + (error.response?.data?.detail || error.message))
+      loading.value = false
+      return
     }
+    
+    // 获取每个宿舍的最新记录
+    const records = await Promise.allSettled(
+      enabledRules.map(rule => getLatestRecord(rule.dorm_number))
+    )
+    
+    dormRecords.value = records
+      .map((result, index) => {
+        if (result.status === 'fulfilled') {
+          return result.value
+        } else {
+          // 如果获取失败（404等），返回null但保留宿舍号信息
+          return {
+            dorm_number: enabledRules[index].dorm_number,
+            record_time: null,
+            kbalance: null,
+            zbalance: null,
+            balance: null
+          }
+        }
+      })
+      .filter(record => record !== null)
+    
+    // 保留第一个记录作为latestRecord（兼容旧代码）
+    if (dormRecords.value.length > 0) {
+      latestRecord.value = dormRecords.value[0]
+    } else {
+      latestRecord.value = null
+    }
+  } catch (error) {
+    ElMessage.error('获取数据失败：' + (error.response?.data?.detail || error.message))
+    dormRecords.value = []
+    latestRecord.value = null
   } finally {
     loading.value = false
   }
+}
+
+const loadLatestRecord = async () => {
+  // 兼容旧代码，现在使用loadDormRecords
+  await loadDormRecords()
 }
 
 const hasChartData = ref(false)
@@ -209,7 +268,15 @@ const loadChartData = async () => {
   chartLoading.value = true
   hasChartData.value = false
   try {
-    const dormNumber = powerStore.dormNumber || '320'
+    // 使用第一个有数据的宿舍号来显示图表
+    const firstDorm = dormRecords.value.find(r => r && r.dorm_number)
+    if (!firstDorm) {
+      hasChartData.value = false
+      chartLoading.value = false
+      return
+    }
+    
+    const dormNumber = firstDorm.dorm_number
     const records = await getRecords(dormNumber, 30)
     
     await nextTick()
@@ -229,6 +296,32 @@ const loadChartData = async () => {
   } finally {
     chartLoading.value = false
   }
+}
+
+const getDormStatusType = (record) => {
+  if (!record || !record.record_time) return 'info'
+  const kbalance = record.kbalance !== null && record.kbalance !== undefined ? record.kbalance : record.balance
+  const zbalance = record.zbalance
+  const minBalance = Math.min(
+    kbalance !== null && kbalance !== undefined ? kbalance : Infinity,
+    zbalance !== null && zbalance !== undefined ? zbalance : Infinity
+  )
+  if (minBalance < 10) return 'danger'
+  if (minBalance < 20) return 'warning'
+  return 'success'
+}
+
+const getDormStatusText = (record) => {
+  if (!record || !record.record_time) return '无数据'
+  const kbalance = record.kbalance !== null && record.kbalance !== undefined ? record.kbalance : record.balance
+  const zbalance = record.zbalance
+  const minBalance = Math.min(
+    kbalance !== null && kbalance !== undefined ? kbalance : Infinity,
+    zbalance !== null && zbalance !== undefined ? zbalance : Infinity
+  )
+  if (minBalance < 10) return '低电量'
+  if (minBalance < 20) return '警告'
+  return '正常'
 }
 
 const initChart = (records) => {
@@ -530,6 +623,70 @@ onMounted(async () => {
   min-height: 300px;
 }
 
+/* 宿舍卡片样式 */
+.dorm-card {
+  margin-bottom: 20px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.dorm-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.dorm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dorm-content {
+  padding: 10px 0;
+}
+
+.dorm-balance-item {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dorm-balance-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.balance-item-label {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.balance-item-label .el-icon {
+  margin-right: 5px;
+}
+
+.balance-item-value {
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.dorm-time {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #909399;
+  margin-top: 10px;
+}
+
+.dorm-time .el-icon {
+  margin-right: 5px;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .dashboard {
@@ -559,6 +716,15 @@ onMounted(async () => {
   
   .chart-container {
     height: 350px;
+  }
+  
+  .dorm-balance-item {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+  
+  .balance-item-value {
+    font-size: 20px;
   }
 }
 

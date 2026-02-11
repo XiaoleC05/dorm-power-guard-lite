@@ -1,0 +1,15 @@
+[project]
+name = "dorm-power-guard-bot"
+version = "1.0.0"
+description = "西华大学电费监控系统 QQ机器人"
+requires-python = ">=3.8"
+
+[project.dependencies]
+nonebot2 = ">=2.4.0"
+nonebot-adapter-onebot = ">=2.4.0"
+fastapi = ">=0.104.0"
+uvicorn = ">=0.24.0"
+
+[tool.nonebot]
+plugins = ["plugins"]
+plugin_dirs = ["plugins"]

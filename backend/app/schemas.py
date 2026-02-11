@@ -31,6 +31,7 @@ class PowerRecordResponse(PowerRecordBase):
 
 class AlertRuleBase(BaseModel):
     dorm_number: str
+    room_id: Optional[str] = None  # 房间ID（roomid，用于查询电费数据）
     kthreshold: Optional[float] = None  # 空调告警阈值（度）
     zthreshold: Optional[float] = None  # 照明告警阈值（度）
     threshold: Optional[float] = None  # 已废弃，保留兼容性
@@ -38,6 +39,7 @@ class AlertRuleBase(BaseModel):
     email_enabled: bool = False
     email_address: Optional[str] = None  # 邮件告警接收邮箱地址
     qq_enabled: bool = False
+    qq_receiver_id: Optional[str] = None  # QQ告警接收者QQ号（私聊）或群号（群聊）
 
 
 class AlertRuleCreate(AlertRuleBase):
@@ -45,6 +47,7 @@ class AlertRuleCreate(AlertRuleBase):
 
 
 class AlertRuleUpdate(BaseModel):
+    room_id: Optional[str] = None  # 房间ID（roomid，用于查询电费数据）
     kthreshold: Optional[float] = None  # 空调告警阈值（度）
     zthreshold: Optional[float] = None  # 照明告警阈值（度）
     threshold: Optional[float] = None  # 已废弃，保留兼容性
@@ -52,6 +55,7 @@ class AlertRuleUpdate(BaseModel):
     email_enabled: Optional[bool] = None
     email_address: Optional[str] = None  # 邮件告警接收邮箱地址
     qq_enabled: Optional[bool] = None
+    qq_receiver_id: Optional[str] = None  # QQ告警接收者QQ号（私聊）或群号（群聊）
 
 
 class AlertRuleResponse(AlertRuleBase):

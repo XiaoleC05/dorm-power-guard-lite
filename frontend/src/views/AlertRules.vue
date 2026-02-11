@@ -13,6 +13,11 @@
       
       <el-table :data="rules" v-loading="loading" stripe>
         <el-table-column prop="dorm_number" label="宿舍号" width="120" />
+        <el-table-column prop="room_id" label="房间ID" width="120">
+          <template #default="{ row }">
+            {{ row.room_id || '-' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="kthreshold" label="空调阈值（度）" width="150">
           <template #default="{ row }">
             <span v-if="row.kthreshold !== null && row.kthreshold !== undefined">
@@ -48,11 +53,25 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="qq_enabled" label="QQ告警" width="100">
+        <el-table-column prop="qq_enabled" label="QQ告警" width="200">
           <template #default="{ row }">
-            <el-tag :type="row.qq_enabled ? 'success' : 'info'">
-              {{ row.qq_enabled ? '启用' : '禁用' }}
-            </el-tag>
+            <div>
+              <el-tag :type="row.qq_enabled ? 'success' : 'info'" style="margin-bottom: 5px; display: block;">
+                {{ row.qq_enabled ? '启用' : '禁用' }}
+              </el-tag>
+              <div v-if="row.qq_enabled" style="font-size: 12px; color: #909399;">
+                <span v-if="row.qq_receiver_id && row.qq_receiver_id.trim() !== ''" style="display: block;">
+                  <el-icon style="margin-right: 3px;"><User /></el-icon>
+                  接收者：{{ row.qq_receiver_id }}
+                </span>
+                <span v-else style="color: #c0c4cc; font-style: italic;">
+                  未配置接收QQ号
+                </span>
+              </div>
+              <div v-if="!row.qq_enabled" style="font-size: 12px; color: #c0c4cc;">
+                QQ告警已禁用
+              </div>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="last_alert_time" label="最后告警时间" width="180">
@@ -78,6 +97,15 @@
       <el-form :model="ruleForm" label-width="140px" :rules="formRules" ref="formRef">
         <el-form-item label="宿舍号">
           <el-input v-model="ruleForm.dorm_number" :disabled="!!editingRule" />
+        </el-form-item>
+        <el-form-item label="房间ID（room_id）">
+          <el-input 
+            v-model="ruleForm.room_id" 
+            placeholder="请输入房间ID（通过抓包获取，如：5699）"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            用于查询电费数据，需要通过抓包工具获取
+          </div>
         </el-form-item>
         <el-form-item label="空调告警阈值（度）">
           <el-input-number v-model="ruleForm.kthreshold" :min="0" :precision="2" style="width: 100%" />
@@ -115,6 +143,19 @@
         <el-form-item label="QQ告警">
           <el-switch v-model="ruleForm.qq_enabled" />
         </el-form-item>
+        <el-form-item 
+          label="QQ接收者" 
+          v-if="ruleForm.qq_enabled"
+          prop="qq_receiver_id"
+        >
+          <el-input 
+            v-model="ruleForm.qq_receiver_id" 
+            placeholder="请输入QQ号（私聊）或群号（群聊），留空使用全局配置"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            输入QQ号发送私聊消息，输入群号发送群消息。留空则使用全局配置
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showDialog = false">取消</el-button>
@@ -127,7 +168,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, User } from '@element-plus/icons-vue'
 import { getAllAlertRules, createAlertRule, updateAlertRule, deleteAlertRule } from '../api/alert'
 import dayjs from 'dayjs'
 
@@ -137,14 +178,17 @@ const showDialog = ref(false)
 const editingRule = ref(null)
 const ruleForm = ref({
   dorm_number: '',
+  room_id: '',
   kthreshold: 20.0,
   zthreshold: 20.0,
   threshold: null,
   enabled: true,
   email_enabled: false,
   email_address: '',
-  qq_enabled: false
+  qq_enabled: false,
+  qq_receiver_id: ''
 })
+
 
 const formatTime = (time) => {
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
@@ -154,17 +198,31 @@ const loadRules = async () => {
   loading.value = true
   try {
     const data = await getAllAlertRules()
-    // 确保email_address字段存在，处理null和undefined值
+    // 确保字段存在，处理null和undefined值，从数据库加载数据
     rules.value = data.map(rule => {
-      // 处理email_address字段，将null/undefined转换为空字符串
+      // 处理room_id字段，从数据库加载
+      const roomId = (rule.room_id !== null && 
+                      rule.room_id !== undefined && 
+                      rule.room_id !== '') 
+        ? String(rule.room_id).trim() 
+        : ''
+      // 处理email_address字段，从数据库加载
       const emailAddress = (rule.email_address !== null && 
                             rule.email_address !== undefined && 
                             rule.email_address !== '') 
         ? String(rule.email_address).trim() 
         : ''
+      // 处理qq_receiver_id字段，从数据库加载
+      const qqReceiverId = (rule.qq_receiver_id !== null && 
+                            rule.qq_receiver_id !== undefined && 
+                            rule.qq_receiver_id !== '') 
+        ? String(rule.qq_receiver_id).trim() 
+        : ''
       return {
         ...rule,
-        email_address: emailAddress
+        room_id: roomId,
+        email_address: emailAddress,
+        qq_receiver_id: qqReceiverId
       }
     })
   } catch (error) {
@@ -201,11 +259,45 @@ const formRules = {
       },
       trigger: 'blur'
     }
+  ],
+  qq_receiver_id: [
+    {
+      validator: (rule, value, callback) => {
+        if (ruleForm.value.qq_enabled) {
+          if (!value || !value.trim()) {
+            callback(new Error('启用QQ告警时必须输入接收QQ号或群号'))
+          } else {
+            // 验证QQ号格式（纯数字，支持群号和用户QQ号）
+            const qqStr = value.trim()
+            const qqRegex = /^\d+$/
+            if (!qqRegex.test(qqStr)) {
+              callback(new Error('QQ号或群号必须是数字'))
+              return
+            }
+            callback()
+          }
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
 const editRule = async (rule) => {
   editingRule.value = rule
+  
+  // 处理room_id字段
+  let roomId = ''
+  if (rule.room_id !== null && 
+      rule.room_id !== undefined && 
+      rule.room_id !== '') {
+    const roomIdStr = String(rule.room_id).trim()
+    if (roomIdStr !== '' && roomIdStr !== 'null' && roomIdStr !== 'undefined') {
+      roomId = roomIdStr
+    }
+  }
   
   // 确保email_address字段存在，处理null、undefined和空字符串
   // 注意：API返回的null可能在前端显示为undefined或null，需要统一处理
@@ -219,16 +311,29 @@ const editRule = async (rule) => {
     }
   }
   
+  // 处理qq_receiver_id字段
+  let qqReceiverId = ''
+  if (rule.qq_receiver_id !== null && 
+      rule.qq_receiver_id !== undefined && 
+      rule.qq_receiver_id !== '') {
+    const qqStr = String(rule.qq_receiver_id).trim()
+    if (qqStr !== '' && qqStr !== 'null' && qqStr !== 'undefined') {
+      qqReceiverId = qqStr
+    }
+  }
+  
   // 重新创建表单对象，确保响应式更新
   ruleForm.value = {
     dorm_number: rule.dorm_number || '',
+    room_id: roomId,
     kthreshold: rule.kthreshold !== null && rule.kthreshold !== undefined ? rule.kthreshold : 20.0,
     zthreshold: rule.zthreshold !== null && rule.zthreshold !== undefined ? rule.zthreshold : 20.0,
     threshold: rule.threshold,
     enabled: rule.enabled !== null && rule.enabled !== undefined ? rule.enabled : true,
     email_enabled: rule.email_enabled !== null && rule.email_enabled !== undefined ? rule.email_enabled : false,
     email_address: emailAddress,
-    qq_enabled: rule.qq_enabled !== null && rule.qq_enabled !== undefined ? rule.qq_enabled : false
+    qq_enabled: rule.qq_enabled !== null && rule.qq_enabled !== undefined ? rule.qq_enabled : false,
+    qq_receiver_id: qqReceiverId
   }
   
   showDialog.value = true
@@ -252,24 +357,48 @@ const saveRule = async () => {
       ruleForm.value.email_address = ''
     }
     
+    // 如果禁用QQ告警，清空QQ接收者ID
+    if (!ruleForm.value.qq_enabled) {
+      ruleForm.value.qq_receiver_id = ''
+    }
+    
+    // 准备发送的数据，确保空字符串转换为null
+    const submitData = {
+      ...ruleForm.value,
+      // 处理room_id：如果为空字符串，转换为null
+      room_id: ruleForm.value.room_id && ruleForm.value.room_id.trim() 
+        ? ruleForm.value.room_id.trim() 
+        : null,
+      // 处理email_address：如果为空字符串，转换为null
+      email_address: ruleForm.value.email_address && ruleForm.value.email_address.trim() 
+        ? ruleForm.value.email_address.trim() 
+        : null,
+      // 处理qq_receiver_id：如果为空字符串，转换为null
+      qq_receiver_id: ruleForm.value.qq_receiver_id && ruleForm.value.qq_receiver_id.trim() 
+        ? ruleForm.value.qq_receiver_id.trim() 
+        : null
+    }
+    
     if (editingRule.value) {
-      await updateAlertRule(editingRule.value.dorm_number, ruleForm.value)
+      await updateAlertRule(editingRule.value.dorm_number, submitData)
       ElMessage.success('更新成功')
     } else {
-      await createAlertRule(ruleForm.value)
+      await createAlertRule(submitData)
       ElMessage.success('创建成功')
     }
     showDialog.value = false
     editingRule.value = null
     ruleForm.value = {
       dorm_number: '',
+      room_id: '',
       kthreshold: 20.0,
       zthreshold: 20.0,
       threshold: null,
       enabled: true,
       email_enabled: false,
       email_address: '',
-      qq_enabled: false
+      qq_enabled: false,
+      qq_receiver_id: ''
     }
     if (formRef.value) {
       formRef.value.clearValidate()

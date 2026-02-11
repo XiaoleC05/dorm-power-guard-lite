@@ -4,6 +4,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timedelta
+from typing import Optional, Tuple
 from typing import List, Optional
 from app.models import PowerRecord, AlertRule, AlertLog
 from app.schemas import PowerRecordCreate, AlertRuleCreate, AlertRuleUpdate
@@ -84,7 +85,37 @@ class AlertRuleService:
     @staticmethod
     def create_rule(db: Session, rule: AlertRuleCreate) -> AlertRule:
         """创建告警规则"""
-        db_rule = AlertRule(**rule.dict())
+        rule_data = rule.dict()
+        # 验证：启用邮箱告警时必须提供接收邮箱地址
+        if rule.email_enabled:
+            if not rule.email_address or not rule.email_address.strip():
+                raise ValueError("启用邮件告警时必须输入接收邮箱地址")
+        
+        # 验证：启用QQ告警时必须提供接收QQ号或群号
+        if rule.qq_enabled:
+            if not rule.qq_receiver_id or not rule.qq_receiver_id.strip():
+                raise ValueError("启用QQ告警时必须输入接收QQ号或群号")
+        
+        # 处理空字符串，转换为None以保持数据库一致性
+        if 'room_id' in rule_data:
+            if rule_data['room_id'] == '' or (rule_data['room_id'] and not rule_data['room_id'].strip()):
+                rule_data['room_id'] = None
+            elif rule_data['room_id']:
+                rule_data['room_id'] = rule_data['room_id'].strip()
+        
+        if 'email_address' in rule_data:
+            if rule_data['email_address'] == '' or (rule_data['email_address'] and not rule_data['email_address'].strip()):
+                rule_data['email_address'] = None
+            elif rule_data['email_address']:
+                rule_data['email_address'] = rule_data['email_address'].strip()
+        
+        if 'qq_receiver_id' in rule_data:
+            if rule_data['qq_receiver_id'] == '' or (rule_data['qq_receiver_id'] and not rule_data['qq_receiver_id'].strip()):
+                rule_data['qq_receiver_id'] = None
+            elif rule_data['qq_receiver_id']:
+                rule_data['qq_receiver_id'] = rule_data['qq_receiver_id'].strip()
+        
+        db_rule = AlertRule(**rule_data)
         db.add(db_rule)
         db.commit()
         db.refresh(db_rule)
@@ -110,6 +141,41 @@ class AlertRuleService:
             return None
         
         update_data = rule_update.dict(exclude_unset=True)
+        # 确定最终的email_enabled和qq_enabled状态
+        final_email_enabled = update_data.get('email_enabled', rule.email_enabled)
+        final_qq_enabled = update_data.get('qq_enabled', rule.qq_enabled)
+        
+        # 验证：启用邮箱告警时必须提供接收邮箱地址
+        if final_email_enabled:
+            email_address = update_data.get('email_address', rule.email_address)
+            if not email_address or not str(email_address).strip():
+                raise ValueError("启用邮件告警时必须输入接收邮箱地址")
+        
+        # 验证：启用QQ告警时必须提供接收QQ号或群号
+        if final_qq_enabled:
+            qq_receiver_id = update_data.get('qq_receiver_id', rule.qq_receiver_id)
+            if not qq_receiver_id or not str(qq_receiver_id).strip():
+                raise ValueError("启用QQ告警时必须输入接收QQ号或群号")
+        
+        # 处理空字符串，转换为None以保持数据库一致性
+        if 'room_id' in update_data:
+            if update_data['room_id'] == '' or (update_data['room_id'] and not update_data['room_id'].strip()):
+                update_data['room_id'] = None
+            elif update_data['room_id']:
+                update_data['room_id'] = update_data['room_id'].strip()
+        
+        if 'email_address' in update_data:
+            if update_data['email_address'] == '' or (update_data['email_address'] and not update_data['email_address'].strip()):
+                update_data['email_address'] = None
+            elif update_data['email_address']:
+                update_data['email_address'] = update_data['email_address'].strip()
+        
+        if 'qq_receiver_id' in update_data:
+            if update_data['qq_receiver_id'] == '' or (update_data['qq_receiver_id'] and not update_data['qq_receiver_id'].strip()):
+                update_data['qq_receiver_id'] = None
+            elif update_data['qq_receiver_id']:
+                update_data['qq_receiver_id'] = update_data['qq_receiver_id'].strip()
+        
         for key, value in update_data.items():
             setattr(rule, key, value)
         
@@ -165,34 +231,69 @@ class CrawlerService:
     @staticmethod
     def crawl_and_save(db: Session, force_alert: bool = False) -> bool:
         """
-        执行爬虫任务并保存数据
-        返回是否成功
+        执行爬虫任务并保存数据（支持多宿舍）
+        遍历所有启用的告警规则，为每个宿舍获取电费数据
         
         Args:
             db: 数据库会话
             force_alert: 是否强制发送告警（忽略防频繁告警限制，用于手动触发）
+        
+        Returns:
+            bool: 是否至少成功获取一个宿舍的数据
         """
         try:
-            crawler = get_crawler()
-            data = crawler.fetch_power_data()
+            # 获取所有启用的告警规则
+            enabled_rules = db.query(AlertRule).filter(AlertRule.enabled == True).all()
             
-            if not data:
-                logger.warning("爬虫未获取到数据")
+            if not enabled_rules:
+                logger.warning("没有启用的告警规则，跳过爬虫任务")
                 return False
             
-            # 保存记录
-            record = PowerRecordCreate(**data)
-            PowerRecordService.create_record(db, record)
+            logger.info(f"找到 {len(enabled_rules)} 个启用的告警规则，开始获取电费数据")
             
-            logger.info(f"成功抓取并保存电费数据：{data['dorm_number']}, 空调余量 {data.get('kbalance', 'N/A')} 度, 照明余量 {data.get('zbalance', 'N/A')} 度")
+            crawler = get_crawler()
+            success_count = 0
+            failed_count = 0
             
-            # 检查是否需要告警
-            CrawlerService.check_and_alert(db, data['dorm_number'], data.get('kbalance'), data.get('zbalance'), force_alert=force_alert)
+            # 遍历每个启用的告警规则
+            for rule in enabled_rules:
+                if not rule.room_id:
+                    logger.warning(f"宿舍 {rule.dorm_number} 未配置room_id，跳过")
+                    failed_count += 1
+                    continue
+                
+                try:
+                    # 使用告警规则中的room_id和dorm_number获取数据
+                    data = crawler.fetch_power_data(dorm_number=rule.dorm_number, room_id=rule.room_id)
+                    
+                    if not data:
+                        logger.warning(f"宿舍 {rule.dorm_number} 未获取到数据")
+                        failed_count += 1
+                        continue
+                    
+                    # 保存记录
+                    record = PowerRecordCreate(**data)
+                    PowerRecordService.create_record(db, record)
+                    
+                    logger.info(f"成功抓取并保存电费数据：{data['dorm_number']}, 空调余量 {data.get('kbalance', 'N/A')} 度, 照明余量 {data.get('zbalance', 'N/A')} 度")
+                    
+                    # 检查是否需要告警
+                    CrawlerService.check_and_alert(db, data['dorm_number'], data.get('kbalance'), data.get('zbalance'), force_alert=force_alert)
+                    
+                    success_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"获取宿舍 {rule.dorm_number} 的电费数据失败：{e}", exc_info=True)
+                    failed_count += 1
+                    continue
             
-            return True
+            logger.info(f"爬虫任务完成：成功 {success_count} 个，失败 {failed_count} 个")
+            return success_count > 0
             
         except Exception as e:
-            logger.error(f"爬虫任务执行失败：{e}")
+            logger.error(f"爬虫任务执行失败：{e}", exc_info=True)
+            import traceback
+            logger.error(f"详细错误信息：{traceback.format_exc()}")
             return False
     
     @staticmethod
@@ -215,24 +316,79 @@ class CrawlerService:
         # 检查空调告警
         if kbalance is not None and rule.kthreshold is not None:
             if kbalance < rule.kthreshold:
+                logger.info(f"触发空调告警：{dorm_number}, 余额 {kbalance:.2f} 度 < 阈值 {rule.kthreshold:.2f} 度")
                 CrawlerService._send_alert(
                     db, rule, dorm_number, kbalance, rule.kthreshold, 'ac', '空调', force_alert=force_alert
                 )
+            else:
+                logger.debug(f"空调余额正常：{dorm_number}, 余额 {kbalance:.2f} 度 >= 阈值 {rule.kthreshold:.2f} 度")
         
         # 检查照明告警
         if zbalance is not None and rule.zthreshold is not None:
             if zbalance < rule.zthreshold:
+                logger.info(f"触发照明告警：{dorm_number}, 余额 {zbalance:.2f} 度 < 阈值 {rule.zthreshold:.2f} 度")
                 CrawlerService._send_alert(
                     db, rule, dorm_number, zbalance, rule.zthreshold, 'light', '照明', force_alert=force_alert
                 )
+            else:
+                logger.debug(f"照明余额正常：{dorm_number}, 余额 {zbalance:.2f} 度 >= 阈值 {rule.zthreshold:.2f} 度")
         
         # 兼容旧版本：如果设置了threshold但没有设置kthreshold和zthreshold
         if rule.threshold is not None and rule.kthreshold is None and rule.zthreshold is None:
             balance = kbalance if kbalance is not None else zbalance
             if balance is not None and balance < rule.threshold:
+                logger.info(f"触发告警（兼容模式）：{dorm_number}, 余额 {balance:.2f} 度 < 阈值 {rule.threshold:.2f} 度")
                 CrawlerService._send_alert(
                     db, rule, dorm_number, balance, rule.threshold, 'ac', '空调', force_alert=force_alert
                 )
+    
+    @staticmethod
+    def _should_send_alert(db: Session, dorm_number: str, category: str, category_name: str, 
+                          alert_type: str, force_alert: bool = False) -> tuple[bool, Optional[str]]:
+        """
+        检查是否应该发送告警（防频繁告警机制）
+        
+        Args:
+            db: 数据库会话
+            dorm_number: 宿舍号
+            category: 告警类别（ac/light）
+            category_name: 告警类别名称（空调/照明）
+            alert_type: 告警类型（email/qq）
+            force_alert: 是否强制发送告警
+        
+        Returns:
+            (should_send, reason) 元组
+            should_send: 是否应该发送
+            reason: 原因说明（如果should_send=False）
+        """
+        if force_alert:
+            return True, None
+        
+        # 查找该类别和类型的最近一次成功告警
+        last_success_log = db.query(AlertLog).filter(
+            AlertLog.dorm_number == dorm_number,
+            AlertLog.alert_category == category,
+            AlertLog.alert_type == alert_type,
+            AlertLog.alert_status == 'success'
+        ).order_by(desc(AlertLog.created_at)).first()
+        
+        if last_success_log:
+            time_diff = datetime.now() - last_success_log.created_at
+            if time_diff < timedelta(hours=1):
+                return False, f"距离上次{alert_type}告警成功不足1小时（{int(time_diff.total_seconds() / 60)}分钟前）"
+        
+        # 如果上次告警失败，允许立即重试
+        last_failed_log = db.query(AlertLog).filter(
+            AlertLog.dorm_number == dorm_number,
+            AlertLog.alert_category == category,
+            AlertLog.alert_type == alert_type,
+            AlertLog.alert_status == 'failed'
+        ).order_by(desc(AlertLog.created_at)).first()
+        
+        if last_failed_log:
+            logger.info(f"上次{alert_type}告警失败，允许立即重试：{dorm_number} ({category_name})")
+        
+        return True, None
     
     @staticmethod
     def _send_alert(db: Session, rule: AlertRule, dorm_number: str, balance: float, 
@@ -250,34 +406,37 @@ class CrawlerService:
             category_name: 告警类别名称（空调/照明）
             force_alert: 是否强制发送告警（忽略防频繁告警限制）
         """
-        # 检查是否需要发送告警（避免频繁告警，至少间隔1小时）
-        # 但如果是上次告警失败，或强制告警，则立即发送
-        if not force_alert and rule.last_alert_time:
-            time_diff = datetime.now() - rule.last_alert_time
-            if time_diff < timedelta(hours=1):
-                # 检查上次告警是否成功
-                last_log = db.query(AlertLog).filter(
-                    AlertLog.dorm_number == dorm_number,
-                    AlertLog.alert_category == category
-                ).order_by(desc(AlertLog.created_at)).first()
-                
-                # 如果上次告警成功，则跳过（避免频繁告警）
-                if last_log and last_log.alert_status == 'success':
-                    logger.info(f"距离上次成功告警不足1小时，跳过告警：{dorm_number} ({category_name})")
-                    return
-                # 如果上次告警失败，则立即重试
-                elif last_log and last_log.alert_status == 'failed':
-                    logger.info(f"上次告警失败，立即重试：{dorm_number} ({category_name})")
-                else:
-                    logger.info(f"距离上次告警不足1小时，跳过告警：{dorm_number} ({category_name})")
-                    return
-        
         # 获取当前最新的记录以获取完整的余量信息
         latest_record = PowerRecordService.get_latest_record(db, dorm_number)
         kbalance = latest_record.kbalance if latest_record else None
         zbalance = latest_record.zbalance if latest_record else None
         
-        # 发送告警
+        # 分别检查每种告警类型是否应该发送
+        email_should_send = True
+        qq_should_send = True
+        email_reason = None
+        qq_reason = None
+        
+        if rule.email_enabled:
+            email_should_send, email_reason = CrawlerService._should_send_alert(
+                db, dorm_number, category, category_name, 'email', force_alert
+            )
+            if not email_should_send:
+                logger.info(f"跳过邮件告警：{email_reason}")
+        
+        if rule.qq_enabled:
+            qq_should_send, qq_reason = CrawlerService._should_send_alert(
+                db, dorm_number, category, category_name, 'qq', force_alert
+            )
+            if not qq_should_send:
+                logger.info(f"跳过QQ告警：{qq_reason}")
+        
+        # 如果两种告警都被跳过，直接返回
+        if not email_should_send and not qq_should_send:
+            logger.info(f"所有告警类型都被跳过：{dorm_number} ({category_name})")
+            return
+        
+        # 发送告警（只发送允许发送的类型）
         alert_manager = get_alert_manager()
         results = alert_manager.send_alert(
             dorm_number=dorm_number,
@@ -285,38 +444,67 @@ class CrawlerService:
             category_name=category_name,
             balance=balance,
             threshold=threshold,
-            email_enabled=rule.email_enabled,
+            email_enabled=rule.email_enabled and email_should_send,
             email_address=rule.email_address,
-            qq_enabled=rule.qq_enabled,
+            qq_enabled=rule.qq_enabled and qq_should_send,
+            qq_receiver_id=getattr(rule, 'qq_receiver_id', None),  # 从规则中获取QQ接收者ID
             kbalance=kbalance,
             zbalance=zbalance
         )
         
-        # 记录告警日志
-        all_success = True
-        for alert_type, success in results.items():
-            if rule.email_enabled and alert_type == 'email':
-                AlertLogService.create_log(
-                    db, dorm_number, balance, threshold, category,
-                    'email', 'success' if success else 'failed'
-                )
-                if not success:
-                    all_success = False
-            if rule.qq_enabled and alert_type == 'qq':
-                AlertLogService.create_log(
-                    db, dorm_number, balance, threshold, category,
-                    'qq', 'success' if success else 'failed'
-                )
-                if not success:
-                    all_success = False
+        # 记录告警日志（记录所有尝试发送的告警）
+        email_success = False
+        qq_success = False
         
-        # 只有在至少有一个告警发送成功时，才更新最后告警时间
-        # 如果全部失败，不更新时间，以便下次立即重试
-        if all_success and (results.get('email') or results.get('qq')):
+        if rule.email_enabled:
+            email_success = results.get('email', False)
+            error_msg = None if email_success else email_reason or "邮件发送失败"
+            AlertLogService.create_log(
+                db, dorm_number, balance, threshold, category,
+                'email', 'success' if email_success else 'failed',
+                alert_message=error_msg
+            )
+        
+        if rule.qq_enabled:
+            qq_success = results.get('qq', False)
+            # 如果失败，尝试从告警日志中获取更详细的错误信息
+            if not qq_success:
+                # 检查最近的QQ告警日志，获取详细错误
+                recent_qq_log = db.query(AlertLog).filter(
+                    AlertLog.dorm_number == dorm_number,
+                    AlertLog.alert_category == category,
+                    AlertLog.alert_type == 'qq'
+                ).order_by(desc(AlertLog.created_at)).first()
+                
+                if recent_qq_log and recent_qq_log.alert_message:
+                    error_msg = recent_qq_log.alert_message
+                else:
+                    error_msg = qq_reason or "QQ消息发送失败，请检查NoneBot和NapCatQQ连接状态"
+            else:
+                error_msg = None
+            
+            AlertLogService.create_log(
+                db, dorm_number, balance, threshold, category,
+                'qq', 'success' if qq_success else 'failed',
+                alert_message=error_msg
+            )
+        
+        # 更新最后告警时间（只要有一种告警成功就更新）
+        if email_success or qq_success:
             rule.last_alert_time = datetime.now()
             db.commit()
-            logger.info(f"告警发送成功：{dorm_number}, {category_name}余量 {balance} 度, 阈值 {threshold} 度")
+            success_types = []
+            if email_success:
+                success_types.append("邮件")
+            if qq_success:
+                success_types.append("QQ")
+            logger.info(f"告警发送成功（{'+'.join(success_types)}）：{dorm_number}, {category_name}余量 {balance:.2f} 度, 阈值 {threshold:.2f} 度")
         else:
             # 即使失败也提交日志记录
             db.commit()
-            logger.warning(f"告警发送失败：{dorm_number}, {category_name}余量 {balance} 度, 阈值 {threshold} 度，将在下次检查时重试")
+            failed_types = []
+            if rule.email_enabled:
+                failed_types.append("邮件")
+            if rule.qq_enabled:
+                failed_types.append("QQ")
+            logger.warning(f"告警发送失败（{'+'.join(failed_types)}）：{dorm_number}, {category_name}余量 {balance:.2f} 度, 阈值 {threshold:.2f} 度，将在下次检查时重试")

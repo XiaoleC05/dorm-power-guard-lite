@@ -22,6 +22,7 @@
 - [部署指南](#部署指南)
 - [代码更新和维护](#代码更新和维护)
 - [常见问题](#常见问题)
+- [相关文档](#相关文档)
 - [联系与支持](#联系与支持)
 
 ---
@@ -136,12 +137,12 @@ dorm-power-guard-lite/
 │   │   └── main.py         # FastAPI应用入口
 │   ├── requirements.txt    # Python依赖
 │   ├── .env.example        # 环境变量示例
-│   ├── init_db.sql         # 数据库初始化SQL
-│   ├── migrate_add_user_system.py # 用户系统数据库迁移脚本
-│   ├── create_admin.py     # 创建管理员账号脚本
-│   ├── run.py              # 启动脚本
-│   ├── start.bat           # Windows启动脚本
-│   └── start.ps1           # PowerShell启动脚本
+│   ├── scripts/            # 脚本目录
+│   │   ├── db/            # 数据库脚本
+│   │   ├── migrations/    # 迁移脚本
+│   │   ├── start/         # 启动脚本
+│   │   └── install/       # 安装脚本
+│   ├── run.py              # 应用启动入口
 ├── frontend/               # 前端代码
 │   ├── src/
 │   │   ├── api/           # API调用
@@ -149,6 +150,7 @@ dorm-power-guard-lite/
 │   │   │   ├── power.js   # 电费记录API
 │   │   │   ├── alert.js   # 告警API
 │   │   │   └── system.js  # 系统管理API
+│   │   ├── components/    # 可复用组件
 │   │   ├── views/         # 页面组件
 │   │   │   ├── Dashboard.vue  # 监控面板
 │   │   │   ├── Records.vue    # 电费记录
@@ -197,7 +199,7 @@ pip install -r requirements.txt
 **方式一：使用SQL脚本（推荐）**
 
 ```bash
-mysql -u root -p < init_db.sql
+mysql -u root -p < backend/scripts/db/init_db.sql
 ```
 
 **方式二：手动创建**
@@ -237,23 +239,39 @@ cp .env.example .env
 
 #### 3.4 启动后端
 
-**Windows系统：**
+**Windows系统（推荐使用批处理文件）：**
 
-```bash
-# 方式一：使用批处理文件
-start.bat
+```powershell
+cd backend
+.\scripts\start\start.bat
+```
 
-# 方式二：手动启动
+或使用PowerShell脚本：
+
+```powershell
+cd backend
+.\scripts\start\start.ps1
+```
+
+**Windows系统（手动启动）：**
+
+```powershell
+cd backend
 python run.py
 ```
 
 **Linux/Mac系统：**
 
 ```bash
+cd backend
 python3 run.py
 ```
 
 后端将在 `http://localhost:8000` 启动。
+
+**访问API文档：**
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
 ### 4. 前端部署
 
@@ -279,6 +297,25 @@ npm run build
 ```
 
 构建产物在 `dist/` 目录。
+
+### 5. QQ机器人配置（可选）
+
+如果需要使用QQ告警功能，需要配置QQ机器人：
+
+1. **安装NoneBot**（已包含在项目中）
+2. **安装NapCatQQ**（OneBot实现）
+3. **配置连接**（详见[QQ机器人配置](#qq机器人配置)章节）
+
+**快速启动QQ机器人：**
+
+```powershell
+# 启动NoneBot
+cd backend\nonebot_bot
+python bot.py
+
+# 启动NapCatQQ（需要先安装）
+# 参考：backend/nonebot_bot/README.md
+```
 
 ---
 
@@ -388,15 +425,23 @@ BASE_URL=https://yourdomain.com  # 生产环境
 
 **注意**：告警规则中配置的邮箱优先级高于全局配置的 `EMAIL_TO`。
 
-### 5. QQ机器人配置（可选）
+### 5. QQ机器人配置（可选，使用 NoneBot）
 
 ```env
-# QQ机器人配置
+# QQ机器人配置（NoneBot）
 QQ_BOT_ENABLED=true
-QQ_BOT_TYPE=go-cqhttp
-QQ_BOT_API_URL=http://localhost:5700
+QQ_BOT_API_URL=http://localhost:8080
 QQ_BOT_GROUP_ID=123456789
+QQ_BOT_USER_ID=
+QQ_BOT_ACCESS_TOKEN=
 ```
+
+**详细配置指南：**
+- `backend/QQ_BOT_SETUP.md` - QQ机器人完整配置指南
+- `backend/NONEBOT_SETUP.md` - NoneBot详细配置指南
+- `backend/nonebot_bot/README.md` - NoneBot项目说明和快速开始
+
+**文档索引：** 查看 `backend/DOCUMENTATION_INDEX.md` 了解所有文档位置
 
 ---
 
@@ -575,7 +620,7 @@ mitmproxy -p 8888
 ### 告警功能
 
 - **邮件告警**：使用QQ邮箱发送告警邮件到指定邮箱
-- **QQ机器人告警**：支持go-cqhttp等QQ机器人
+- **QQ机器人告警**：支持 NoneBot QQ机器人
 - **防频繁告警**：1小时内不重复告警（手动触发除外）
 - **分类告警**：支持空调和照明分别设置阈值
 - **失败重试**：上次告警失败时，下次触发立即重试
@@ -864,7 +909,7 @@ ALTER TABLE alert_rules ADD UNIQUE KEY uk_dorm_number (dorm_number);
 ```bash
 # 后端
 cd backend
-start.bat
+scripts\start\start.bat
 
 # 前端（新终端）
 cd frontend
@@ -876,7 +921,7 @@ npm run dev
 ```powershell
 # 以管理员身份运行PowerShell
 cd backend
-.\install_windows_service.ps1
+.\scripts\install\install_windows_service.ps1
 ```
 
 ### Linux/Mac系统部署
@@ -1216,24 +1261,10 @@ tail -f backend/logs/app.log
 
 ---
 
-## 更新日志
+## 相关文档
 
-- **v2.0.0** - 多用户系统版本
-  - 新增用户注册/登录系统（邮箱+密码）
-  - 新增管理员系统（账号密码登录）
-  - 新增宿舍提交功能（学生提交，确认后激活）
-  - 新增多宿舍申请功能（学生申请，管理员审批）
-  - 新增我的监控功能（查看列表，修改规则）
-  - 新增邮件服务（邮箱验证、密码重置）
-  - 新增安全机制（学生确认、提交限制、登录失败限制）
-  - 完善Session管理
-  - 完善管理员管理功能
-
-- **v1.0.0** - 初始版本
-  - 支持西华大学一卡通系统
-  - 支持邮件和QQ告警
-  - 支持数据可视化
-  - 支持空调和照明分类监控
+- **技术栈文档**: [技术栈文档.md](技术栈文档.md) - 系统架构、技术实现细节、技术栈详解
+- **开发日志**: [CHANGELOG.md](CHANGELOG.md) - 版本更新记录、开发历程、故障排查记录
 
 ---
 

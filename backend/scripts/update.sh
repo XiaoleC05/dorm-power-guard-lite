@@ -9,7 +9,7 @@ echo "=========================================="
 
 # 获取脚本所在目录
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 cd "$PROJECT_DIR"
 
 # 备份当前代码
@@ -55,10 +55,10 @@ if [ -f "requirements.txt" ]; then
 fi
 
 # 运行数据库迁移（如果有）
-if [ -f "apply_migration.py" ]; then
+if [ -d "migrations" ]; then
     echo ""
     echo "5. 检查数据库迁移..."
-    python3 apply_migration.py
+    echo "   请手动运行迁移脚本: python migrations/add_*.py"
 fi
 
 # 重启服务

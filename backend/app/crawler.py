@@ -138,9 +138,14 @@ class PowerCrawler:
                 logger.warning("未能自动获取JSESSIONID，可能会影响请求")
                 return True  # 仍然尝试继续（某些API可能不需要JSESSIONID）
     
-    def fetch_power_data(self) -> Optional[Dict]:
+    def fetch_power_data(self, dorm_number: Optional[str] = None, room_id: Optional[str] = None) -> Optional[Dict]:
         """
         抓取电费数据
+        
+        Args:
+            dorm_number: 宿舍号（可选，如果不提供则使用self.dorm_number）
+            room_id: 房间ID（可选，如果不提供则使用self.room_id）
+        
         返回格式：{
             'dorm_number': '宿舍号',
             'balance': 余量（度，优先返回空调余量）,
@@ -154,12 +159,16 @@ class PowerCrawler:
             logger.error("登录失败，无法抓取数据")
             return None
         
-        if not self.room_id:
-            logger.error("未配置房间ID（CRAWLER_ROOM_ID），无法查询电费")
+        # 使用传入的参数或默认值
+        target_dorm_number = dorm_number or self.dorm_number
+        target_room_id = room_id or self.room_id
+        
+        if not target_room_id:
+            logger.error(f"未配置房间ID，无法查询宿舍 {target_dorm_number} 的电费")
             return None
         
         try:
-            logger.info(f"开始抓取房间 {self.dorm_number} (roomid={self.room_id}) 的电费数据")
+            logger.info(f"开始抓取房间 {target_dorm_number} (roomid={target_room_id}) 的电费数据")
             
             # 调用querySydl API查询电费
             api_url = f"{self.base_url}/channel/querySydl"
@@ -169,7 +178,7 @@ class PowerCrawler:
                 'yqid': self.yq_id,
                 'buildingid': self.building_id,
                 'floorid': self.floor_id,
-                'roomid': self.room_id,
+                'roomid': target_room_id,
                 'factorycode': self.factory_code,
                 'sign': self.sign,
                 'openid': self.openid,
@@ -219,10 +228,10 @@ class PowerCrawler:
             # 优先返回空调余额（根据用户需求）
             balance = kbalance
             
-            logger.info(f"成功获取电费数据 - 空调余量: {kbalance}度, 照明余量: {zbalance}度")
+            logger.info(f"成功获取电费数据 - 宿舍 {target_dorm_number}, 空调余量: {kbalance}度, 照明余量: {zbalance}度")
             
             return {
-                'dorm_number': self.dorm_number,
+                'dorm_number': target_dorm_number,
                 'balance': balance,  # 空调余额（主要监控项）
                 'kbalance': kbalance,  # 空调余额
                 'zbalance': zbalance,  # 照明余额
@@ -252,4 +261,6 @@ class PowerCrawler:
 
 def get_crawler() -> PowerCrawler:
     """获取爬虫实例"""
-    return PowerCrawler()
+    # 默认不自动刷新认证，使用配置中的认证信息
+    # 如果需要刷新，可以在调用时手动创建 PowerCrawler(auto_refresh_auth=True)
+    return PowerCrawler(auto_refresh_auth=False)

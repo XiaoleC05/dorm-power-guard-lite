@@ -5,6 +5,9 @@ echo 宿舍电费监控系统 - 启动脚本
 echo ========================================
 echo.
 
+REM 切换到backend目录
+cd /d %~dp0\..\..
+
 REM 检查.env文件是否存在
 if not exist .env (
     echo [警告] 未找到 .env 文件

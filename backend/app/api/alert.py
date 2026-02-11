@@ -18,7 +18,10 @@ async def create_rule(rule: AlertRuleCreate, db: Session = Depends(get_db)):
     existing = AlertRuleService.get_rule(db, rule.dorm_number)
     if existing:
         raise HTTPException(status_code=400, detail="该宿舍的告警规则已存在")
-    return AlertRuleService.create_rule(db, rule)
+    try:
+        return AlertRuleService.create_rule(db, rule)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/rules", response_model=List[AlertRuleResponse], summary="获取所有告警规则")
@@ -43,10 +46,13 @@ async def update_rule(
     db: Session = Depends(get_db)
 ):
     """更新告警规则"""
-    rule = AlertRuleService.update_rule(db, dorm_number, rule_update)
-    if not rule:
-        raise HTTPException(status_code=404, detail="未找到告警规则")
-    return rule
+    try:
+        rule = AlertRuleService.update_rule(db, dorm_number, rule_update)
+        if not rule:
+            raise HTTPException(status_code=404, detail="未找到告警规则")
+        return rule
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/rules/{dorm_number}", summary="删除告警规则")

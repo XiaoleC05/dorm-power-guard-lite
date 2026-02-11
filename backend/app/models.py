@@ -31,6 +31,7 @@ class AlertRule(Base):
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     dorm_number = Column(String(50), nullable=False, comment="宿舍号")
+    room_id = Column(String(50), nullable=True, comment="房间ID（roomid，用于查询电费数据）")
     kthreshold = Column(Float, nullable=True, comment="空调告警阈值（度）")
     zthreshold = Column(Float, nullable=True, comment="照明告警阈值（度）")
     threshold = Column(Float, nullable=True, comment="告警阈值（度，已废弃，使用kthreshold和zthreshold）")
@@ -38,6 +39,7 @@ class AlertRule(Base):
     email_enabled = Column(Boolean, default=False, nullable=False, comment="是否启用邮件告警")
     email_address = Column(String(255), nullable=True, comment="邮件告警接收邮箱地址")
     qq_enabled = Column(Boolean, default=False, nullable=False, comment="是否启用QQ告警")
+    qq_receiver_id = Column(String(50), nullable=True, comment="QQ告警接收者QQ号（私聊）或群号（群聊）")
     last_alert_time = Column(DateTime, nullable=True, comment="最后告警时间")
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now(), comment="更新时间")

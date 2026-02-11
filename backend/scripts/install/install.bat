@@ -5,6 +5,9 @@ echo 宿舍电费监控系统 - 依赖安装脚本
 echo ========================================
 echo.
 
+REM 切换到backend目录
+cd /d %~dp0\..\..
+
 REM 检查Python是否安装
 python --version >nul 2>&1
 if errorlevel 1 (

@@ -12,3 +12,8 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 email-validator==2.1.0
 python-dotenv==1.0.0
+# NoneBot QQ机器人支持
+nonebot2>=2.4.0
+nonebot-adapter-onebot>=2.4.0
+httpx>=0.28.0
+websockets>=16.0

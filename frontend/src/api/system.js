@@ -5,3 +5,9 @@ export const manualCrawl = () => api.post('/system/crawl')
 
 // 获取QQ机器人全局配置
 export const getQQConfig = () => api.get('/system/qq-config')
+
+// 获取系统配置信息
+export const getConfig = () => api.get('/system/config')
+
+// 检查QQ机器人连接状态
+export const checkQQStatus = () => api.get('/system/qq-status')

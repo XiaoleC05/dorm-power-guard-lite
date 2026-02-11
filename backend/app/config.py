@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     CRAWLER_SIGN: Optional[str] = "qt"  # 签名（sign）
     CRAWLER_ORG_ID: Optional[str] = "2"  # 组织ID（orgid）
     
-    # 定时任务配置
-    SCHEDULER_HOURS: str = "8,12,18,22"  # 每天执行时间点（小时）
+    # 定时任务配置（已废弃，现在固定为每小时执行一次）
+    SCHEDULER_HOURS: str = "8,12,18,22"  # 已废弃，保留用于兼容性
     
     # 邮件配置
     EMAIL_ENABLED: bool = False
@@ -54,8 +54,8 @@ class Settings(BaseSettings):
     # QQ机器人配置（NoneBot）
     QQ_BOT_ENABLED: bool = False
     QQ_BOT_API_URL: Optional[str] = None  # NoneBot HTTP API地址（默认：http://localhost:8080）
-    QQ_BOT_GROUP_ID: Optional[str] = None  # QQ群号（发送到群，默认值）
-    QQ_BOT_USER_ID: Optional[str] = None  # QQ用户号（发送到私聊，默认值）
+    QQ_BOT_GROUP_ID: Optional[str] = None  # QQ群号（已废弃，接收方从告警规则中配置）
+    QQ_BOT_USER_ID: Optional[str] = None  # QQ用户号（已废弃，接收方从告警规则中配置）
     QQ_BOT_SENDER_ID: Optional[str] = None  # 发送方QQ号（机器人QQ号，默认：1270667498）
     QQ_BOT_ACCESS_TOKEN: Optional[str] = None  # API访问令牌（如果NoneBot配置了access_token）
     

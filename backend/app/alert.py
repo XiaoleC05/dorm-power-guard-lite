@@ -217,8 +217,8 @@ class QQBotAlert:
                 else:
                     error_msg = result.get("msg", str(result))
                     # 特殊处理：如果返回 "There are no bots to get"，说明NapCatQQ未连接
-                    if "no bots" in error_msg.lower() or "There are no bots" in error_msg:
-                        error_msg = "NoneBot未连接NapCatQQ，请启动NapCatQQ并连接到NoneBot"
+                    if "no bots" in error_msg.lower() or "There are no bots" in error_msg or "no bot" in error_msg.lower():
+                        error_msg = "NoneBot未连接NapCatQQ。请检查：1) NapCatQQ是否已启动并登录 2) NapCatQQ是否已连接到NoneBot（WebSocket连接）"
                     logger.error(f"QQ告警发送失败（API返回错误）：{error_msg}")
                     return False
             else:
@@ -227,11 +227,13 @@ class QQBotAlert:
                 return False
                 
         except requests.exceptions.Timeout:
-            logger.error(f"QQ告警发送超时：{dorm_number}, {category_name}")
+            error_msg = f"QQ告警发送超时：NoneBot可能响应缓慢或NapCatQQ未连接。请检查NoneBot和NapCatQQ状态"
+            logger.error(error_msg)
             return False
         except requests.exceptions.ConnectionError as e:
-            error_msg = f"QQ告警连接失败：NoneBot可能未运行或NapCatQQ未连接。错误：{str(e)}"
+            error_msg = f"QQ告警连接失败：无法连接到NoneBot（{self.api_url}）。请检查：1) NoneBot是否在运行（端口8080） 2) NapCatQQ是否已启动并连接到NoneBot"
             logger.error(error_msg)
+            logger.error(f"连接错误详情：{str(e)}")
             return False
         except Exception as e:
             logger.error(f"QQ告警发送失败：{dorm_number}, {category_name}, 错误：{e}", exc_info=True)

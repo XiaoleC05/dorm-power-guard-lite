@@ -79,42 +79,56 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getRecords } from '../api/power'
-import { usePowerStore } from '../stores/power'
+import { getConfig } from '../api/system'
 import dayjs from 'dayjs'
 
-const powerStore = usePowerStore()
 const loading = ref(false)
 const records = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const dormNumber = ref(null)
 
 const formatTime = (time) => {
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
 }
 
 const getBalanceClass = (balance) => {
+  if (balance === null || balance === undefined) return ''
   if (balance < 10) return 'balance-low'
   if (balance < 20) return 'balance-warning'
   return 'balance-normal'
 }
 
 const loadRecords = async () => {
+  if (!dormNumber.value) {
+    ElMessage.warning('未配置宿舍号')
+    return
+  }
+  
   loading.value = true
   try {
-    const dormNumber = powerStore.dormNumber || '320'
-    const data = await getRecords(dormNumber, pageSize.value)
+    const data = await getRecords(dormNumber.value, pageSize.value)
     records.value = data
     total.value = data.length
   } catch (error) {
-    ElMessage.error('加载记录失败：' + error.message)
+    if (error.response?.status !== 404) {
+      ElMessage.error('加载记录失败：' + (error.response?.data?.detail || error.message))
+    }
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  loadRecords()
+onMounted(async () => {
+  // 获取配置中的宿舍号
+  try {
+    const config = await getConfig()
+    dormNumber.value = config.dorm_number
+    await loadRecords()
+  } catch (error) {
+    ElMessage.error('获取配置失败：' + (error.response?.data?.detail || error.message))
+  }
 })
 </script>
 
@@ -124,10 +138,22 @@ onMounted(() => {
   margin: 0 auto;
 }
 
+.records-page :deep(.el-card) {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.card-header span {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
 }
 
 .balance-low {

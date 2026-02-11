@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
 import Records from '../views/Records.vue'
-import AlertRules from '../views/AlertRules.vue'
 import AlertLogs from '../views/AlertLogs.vue'
 
 const routes = [
@@ -14,11 +13,6 @@ const routes = [
     path: '/records',
     name: 'Records',
     component: Records
-  },
-  {
-    path: '/alert-rules',
-    name: 'AlertRules',
-    component: AlertRules
   },
   {
     path: '/alert-logs',

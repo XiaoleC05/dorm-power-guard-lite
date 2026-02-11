@@ -2,7 +2,7 @@
 定时任务调度器
 """
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.services import CrawlerService
@@ -31,23 +31,15 @@ def init_scheduler():
     if scheduler.running:
         return
     
-    # 解析执行时间点
-    hours = [int(h.strip()) for h in settings.SCHEDULER_HOURS.split(',') if h.strip()]
-    
-    if not hours:
-        logger.warning("未配置定时任务执行时间，使用默认时间：8,12,18,22")
-        hours = [8, 12, 18, 22]
-    
-    # 为每个时间点添加定时任务
-    for hour in hours:
-        scheduler.add_job(
-            scheduled_crawl,
-            trigger=CronTrigger(hour=hour, minute=0),  # 每天指定小时的第0分钟执行
-            id=f'crawl_job_{hour}',
-            name=f'电费爬虫任务-{hour}点',
-            replace_existing=True
-        )
-        logger.info(f"已添加定时任务：每天 {hour}:00 执行爬虫")
+    # 每小时执行一次
+    scheduler.add_job(
+        scheduled_crawl,
+        trigger=IntervalTrigger(hours=1),  # 每小时执行一次
+        id='crawl_job_hourly',
+        name='电费爬虫任务-每小时',
+        replace_existing=True
+    )
+    logger.info("已添加定时任务：每小时执行一次爬虫")
     
     scheduler.start()
     logger.info("定时任务调度器已启动")

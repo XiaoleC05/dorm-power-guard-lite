@@ -4,8 +4,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
-from typing import List, Optional
+from typing import Optional, Tuple, List
 from app.models import PowerRecord, AlertRule, AlertLog
 from app.schemas import PowerRecordCreate, AlertRuleCreate, AlertRuleUpdate
 from app.crawler import get_crawler
@@ -229,7 +228,7 @@ class CrawlerService:
     """爬虫服务"""
     
     @staticmethod
-    def crawl_and_save(db: Session, force_alert: bool = False) -> bool:
+    def crawl_and_save(db: Session, force_alert: bool = False, skip_alert: bool = False) -> bool:
         """
         执行爬虫任务并保存数据（支持多宿舍）
         遍历所有启用的告警规则，为每个宿舍获取电费数据
@@ -237,6 +236,7 @@ class CrawlerService:
         Args:
             db: 数据库会话
             force_alert: 是否强制发送告警（忽略防频繁告警限制，用于手动触发）
+            skip_alert: 是否跳过告警检查（手动触发时设置为True，只获取数据不触发告警）
         
         Returns:
             bool: 是否至少成功获取一个宿舍的数据
@@ -258,8 +258,12 @@ class CrawlerService:
             # 遍历每个启用的告警规则
             for rule in enabled_rules:
                 if not rule.room_id:
-                    logger.warning(f"宿舍 {rule.dorm_number} 未配置room_id，跳过")
+                    error_msg = f"宿舍 {rule.dorm_number} 未配置room_id，无法查询电费数据。请在监控面板编辑告警规则，填写房间ID（room_id）"
+                    logger.warning(error_msg)
                     failed_count += 1
+                    # 如果是单一规则且未配置room_id，抛出异常以便API返回更友好的错误信息
+                    if len(enabled_rules) == 1:
+                        raise ValueError(error_msg)
                     continue
                 
                 try:
@@ -277,8 +281,11 @@ class CrawlerService:
                     
                     logger.info(f"成功抓取并保存电费数据：{data['dorm_number']}, 空调余量 {data.get('kbalance', 'N/A')} 度, 照明余量 {data.get('zbalance', 'N/A')} 度")
                     
-                    # 检查是否需要告警
-                    CrawlerService.check_and_alert(db, data['dorm_number'], data.get('kbalance'), data.get('zbalance'), force_alert=force_alert)
+                    # 检查是否需要告警（如果skip_alert为True，则跳过告警检查）
+                    if not skip_alert:
+                        CrawlerService.check_and_alert(db, data['dorm_number'], data.get('kbalance'), data.get('zbalance'), force_alert=force_alert)
+                    else:
+                        logger.info(f"手动触发模式：跳过告警检查，仅获取数据")
                     
                     success_count += 1
                     
@@ -310,8 +317,15 @@ class CrawlerService:
         """
         rule = AlertRuleService.get_rule(db, dorm_number)
         
-        if not rule or not rule.enabled:
+        if not rule:
+            logger.warning(f"未找到告警规则：{dorm_number}")
             return
+        
+        if not rule.enabled:
+            logger.info(f"告警规则未启用：{dorm_number}")
+            return
+        
+        logger.info(f"开始检查告警：{dorm_number}, 空调余量={kbalance}, 照明余量={zbalance}, 空调阈值={rule.kthreshold}, 照明阈值={rule.zthreshold}, 强制告警={force_alert}")
         
         # 检查空调告警
         if kbalance is not None and rule.kthreshold is not None:
@@ -321,7 +335,7 @@ class CrawlerService:
                     db, rule, dorm_number, kbalance, rule.kthreshold, 'ac', '空调', force_alert=force_alert
                 )
             else:
-                logger.debug(f"空调余额正常：{dorm_number}, 余额 {kbalance:.2f} 度 >= 阈值 {rule.kthreshold:.2f} 度")
+                logger.info(f"空调余额正常：{dorm_number}, 余额 {kbalance:.2f} 度 >= 阈值 {rule.kthreshold:.2f} 度")
         
         # 检查照明告警
         if zbalance is not None and rule.zthreshold is not None:
@@ -331,7 +345,15 @@ class CrawlerService:
                     db, rule, dorm_number, zbalance, rule.zthreshold, 'light', '照明', force_alert=force_alert
                 )
             else:
-                logger.debug(f"照明余额正常：{dorm_number}, 余额 {zbalance:.2f} 度 >= 阈值 {rule.zthreshold:.2f} 度")
+                logger.info(f"照明余额正常：{dorm_number}, 余额 {zbalance:.2f} 度 >= 阈值 {rule.zthreshold:.2f} 度")
+        
+        # 如果照明余量不为None但阈值为None，记录警告
+        if zbalance is not None and rule.zthreshold is None:
+            logger.warning(f"照明余量有值（{zbalance:.2f}度）但未设置照明阈值，无法触发照明告警")
+        
+        # 如果空调余量不为None但阈值为None，记录警告
+        if kbalance is not None and rule.kthreshold is None:
+            logger.warning(f"空调余量有值（{kbalance:.2f}度）但未设置空调阈值，无法触发空调告警")
         
         # 兼容旧版本：如果设置了threshold但没有设置kthreshold和zthreshold
         if rule.threshold is not None and rule.kthreshold is None and rule.zthreshold is None:
@@ -431,12 +453,21 @@ class CrawlerService:
             if not qq_should_send:
                 logger.info(f"跳过QQ告警：{qq_reason}")
         
+        # 检查告警配置
+        logger.info(f"告警配置检查：{dorm_number} ({category_name}), 邮件启用={rule.email_enabled}, QQ启用={rule.qq_enabled}, 邮件地址={rule.email_address}, QQ接收者={getattr(rule, 'qq_receiver_id', None)}")
+        
         # 如果两种告警都被跳过，直接返回
         if not email_should_send and not qq_should_send:
-            logger.info(f"所有告警类型都被跳过：{dorm_number} ({category_name})")
+            logger.warning(f"所有告警类型都被跳过：{dorm_number} ({category_name}), 邮件原因={email_reason}, QQ原因={qq_reason}")
+            return
+        
+        # 如果告警方式未启用，记录警告
+        if not rule.email_enabled and not rule.qq_enabled:
+            logger.warning(f"告警规则中未启用任何告警方式：{dorm_number} ({category_name})")
             return
         
         # 发送告警（只发送允许发送的类型）
+        logger.info(f"准备发送告警：{dorm_number} ({category_name}), 余额={balance:.2f}度, 阈值={threshold:.2f}度")
         alert_manager = get_alert_manager()
         results = alert_manager.send_alert(
             dorm_number=dorm_number,
@@ -451,6 +482,7 @@ class CrawlerService:
             kbalance=kbalance,
             zbalance=zbalance
         )
+        logger.info(f"告警发送结果：{dorm_number} ({category_name}), 邮件={results.get('email', False)}, QQ={results.get('qq', False)}")
         
         # 记录告警日志（记录所有尝试发送的告警）
         email_success = False

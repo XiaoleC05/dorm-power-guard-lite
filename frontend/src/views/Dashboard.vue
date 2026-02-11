@@ -1,176 +1,313 @@
 <template>
   <div class="dashboard">
-    <!-- 多个宿舍信息卡片 -->
-    <el-row :gutter="20" v-if="dormRecords.length > 0">
-      <el-col 
-        :xs="24" 
-        :sm="12" 
-        :md="8" 
-        :lg="6" 
-        v-for="record in dormRecords" 
-        :key="record.dorm_number"
-        style="margin-bottom: 20px;"
-      >
-        <el-card class="dorm-card" shadow="hover">
-          <template #header>
-            <div class="dorm-header">
-              <el-tag type="info" size="large">{{ record.dorm_number }}</el-tag>
-              <el-tag 
-                :type="getDormStatusType(record)" 
-                size="small"
-                style="margin-left: 8px;"
-              >
-                {{ getDormStatusText(record) }}
-              </el-tag>
-            </div>
-          </template>
-          <div class="dorm-content">
-            <div class="dorm-balance-item" v-if="record.kbalance !== null && record.kbalance !== undefined">
-              <div class="balance-item-label">
-                <el-icon><WindPower /></el-icon>
-                <span>空调</span>
-              </div>
-              <div :class="['balance-item-value', getBalanceClass(record.kbalance)]">
-                {{ record.kbalance.toFixed(2) }} 度
-              </div>
-            </div>
-            <div class="dorm-balance-item" v-if="record.zbalance !== null && record.zbalance !== undefined">
-              <div class="balance-item-label">
-                <el-icon><Sunny /></el-icon>
-                <span>照明</span>
-              </div>
-              <div :class="['balance-item-value', getBalanceClass(record.zbalance)]">
-                {{ record.zbalance.toFixed(2) }} 度
-              </div>
-            </div>
-            <div class="dorm-balance-item" v-if="record.kbalance === null && record.kbalance === undefined && record.balance !== null">
-              <div class="balance-item-label">
-                <el-icon><WindPower /></el-icon>
-                <span>余量</span>
-              </div>
-              <div :class="['balance-item-value', getBalanceClass(record.balance)]">
-                {{ record.balance.toFixed(2) }} 度
-              </div>
-            </div>
-            <div class="dorm-time" v-if="record.record_time">
-              <el-icon><Clock /></el-icon>
-              <span>{{ formatTime(record.record_time) }}</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-    
-    <!-- 如果没有数据，显示空状态 -->
-    <el-empty v-if="dormRecords.length === 0 && !loading" description="暂无宿舍数据" :image-size="120">
-      <el-button type="primary" @click="reloadData">立即获取数据</el-button>
-    </el-empty>
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h2 class="page-title">
+        <el-icon class="title-icon"><Monitor /></el-icon>
+        监控面板
+      </h2>
+      <div class="page-actions">
+        <el-button type="success" size="default" @click="reloadData" :loading="reloading" :icon="Refresh">
+          重新获取
+        </el-button>
+      </div>
+    </div>
 
-    <!-- 操作栏 -->
-    <el-row :gutter="20" style="margin-top: 20px">
-      <el-col :span="24">
-        <el-card class="dashboard-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <div class="header-title">
-                <el-icon class="title-icon"><InfoFilled /></el-icon>
-                <span>监控面板</span>
-              </div>
-              <div class="header-actions">
-                <el-button type="success" size="default" @click="reloadData" :loading="reloading" :icon="Refresh">
-                  重新获取
-                </el-button>
-                <el-button type="primary" size="default" @click="refreshData" :icon="Refresh" plain>
-                  刷新显示
-                </el-button>
-              </div>
+    <!-- 宿舍信息卡片 -->
+    <el-card class="dorm-card" shadow="hover" v-loading="loading">
+      <template #header>
+        <div class="dorm-header">
+          <div class="header-left">
+            <div class="dorm-number">
+              <el-icon class="dorm-icon"><HomeFilled /></el-icon>
+              <span class="dorm-number-text">{{ dormNumber || '未配置' }}</span>
             </div>
-          </template>
-          <div v-if="loading" class="loading-container">
-            <el-skeleton :rows="3" animated />
+            <el-tag 
+              :type="getDormStatusType(latestRecord)" 
+              size="default"
+              class="status-tag"
+            >
+              {{ getDormStatusText(latestRecord) }}
+            </el-tag>
           </div>
-          <div v-else class="status-content">
-            <el-alert
-              v-if="dormRecords.length === 0"
-              title="暂无数据"
-              description="请先添加告警规则，系统将自动监控这些宿舍的电费信息"
-              type="info"
-              :closable="false"
-              show-icon
+        </div>
+      </template>
+      <div class="dorm-content">
+        <!-- 有数据时显示 -->
+        <template v-if="latestRecord && latestRecord.record_time">
+          <el-row :gutter="20">
+            <el-col :xs="24" :sm="12" v-if="latestRecord.kbalance !== null && latestRecord.kbalance !== undefined">
+              <div class="balance-card balance-card-ac">
+                <div class="balance-card-header">
+                  <el-icon class="balance-icon"><WindPower /></el-icon>
+                  <span class="balance-label">空调余量</span>
+                </div>
+                <div :class="['balance-value', getBalanceClass(latestRecord.kbalance, alertRule?.kthreshold)]">
+                  {{ latestRecord.kbalance.toFixed(2) }}
+                  <span class="balance-unit">度</span>
+                </div>
+              </div>
+            </el-col>
+            <el-col :xs="24" :sm="12" v-if="latestRecord.zbalance !== null && latestRecord.zbalance !== undefined">
+              <div class="balance-card balance-card-light">
+                <div class="balance-card-header">
+                  <el-icon class="balance-icon"><Sunny /></el-icon>
+                  <span class="balance-label">照明余量</span>
+                </div>
+                <div :class="['balance-value', getBalanceClass(latestRecord.zbalance, alertRule?.zthreshold)]">
+                  {{ latestRecord.zbalance.toFixed(2) }}
+                  <span class="balance-unit">度</span>
+                </div>
+              </div>
+            </el-col>
+            <el-col :xs="24" :sm="12" v-if="latestRecord.kbalance === null && latestRecord.kbalance === undefined && latestRecord.balance !== null">
+              <div class="balance-card balance-card-ac">
+                <div class="balance-card-header">
+                  <el-icon class="balance-icon"><WindPower /></el-icon>
+                  <span class="balance-label">电费余量</span>
+                </div>
+                <div :class="['balance-value', getBalanceClass(latestRecord.balance, alertRule?.threshold || alertRule?.kthreshold || alertRule?.zthreshold)]">
+                  {{ latestRecord.balance.toFixed(2) }}
+                  <span class="balance-unit">度</span>
+                </div>
+              </div>
+            </el-col>
+          </el-row>
+          <div class="dorm-time">
+            <el-icon><Clock /></el-icon>
+            <span>最后更新：{{ formatTime(latestRecord.record_time) }}</span>
+          </div>
+        </template>
+        <!-- 无数据时显示提示 -->
+        <template v-else>
+          <div class="dorm-no-data">
+            <el-empty 
+              :description="!alertRule || !alertRule.room_id ? '需配置room_id' : '暂无数据'" 
+              :image-size="80"
             />
-            <div v-else>
-              <el-statistic-group>
-                <el-statistic title="监控宿舍数" :value="dormRecords.length" />
-                <el-statistic title="有数据宿舍" :value="dormRecords.filter(r => r !== null).length" />
-              </el-statistic-group>
-            </div>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </template>
+      </div>
+    </el-card>
+
+    <!-- 告警规则配置 -->
+    <el-card class="alert-rule-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <div class="header-title">
+            <el-icon class="title-icon"><Setting /></el-icon>
+            <span>告警规则配置</span>
+          </div>
+          <el-button 
+            v-if="!alertRule" 
+            type="primary" 
+            size="default" 
+            @click="showRuleDialog = true"
+            :icon="Plus"
+          >
+            创建规则
+          </el-button>
+        </div>
+      </template>
+      <div v-if="alertRule" class="alert-rule-content">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="房间ID（room_id）">
+            {{ alertRule.room_id || '未配置' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="启用状态">
+            <el-tag :type="alertRule.enabled ? 'success' : 'info'">
+              {{ alertRule.enabled ? '启用' : '禁用' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="空调告警阈值（度）">
+            {{ alertRule.kthreshold !== null && alertRule.kthreshold !== undefined ? alertRule.kthreshold.toFixed(2) : '未设置' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="照明告警阈值（度）">
+            {{ alertRule.zthreshold !== null && alertRule.zthreshold !== undefined ? alertRule.zthreshold.toFixed(2) : '未设置' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="邮件告警">
+            <el-tag :type="alertRule.email_enabled ? 'success' : 'info'">
+              {{ alertRule.email_enabled ? '启用' : '禁用' }}
+            </el-tag>
+            <span v-if="alertRule.email_enabled && alertRule.email_address" style="margin-left: 8px; font-size: 12px; color: #909399;">
+              {{ alertRule.email_address }}
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="QQ告警">
+            <el-tag :type="alertRule.qq_enabled ? 'success' : 'info'">
+              {{ alertRule.qq_enabled ? '启用' : '禁用' }}
+            </el-tag>
+            <span v-if="alertRule.qq_enabled && alertRule.qq_receiver_id" style="margin-left: 8px; font-size: 12px; color: #909399;">
+              {{ alertRule.qq_receiver_id }}
+            </span>
+          </el-descriptions-item>
+        </el-descriptions>
+        <div style="margin-top: 15px; text-align: right;">
+          <el-button type="primary" @click="editRule">编辑规则</el-button>
+        </div>
+      </div>
+      <div v-else class="alert-rule-empty">
+        <el-empty description="未配置告警规则" :image-size="80">
+          <el-button type="primary" @click="showRuleDialog = true">创建规则</el-button>
+        </el-empty>
+      </div>
+    </el-card>
 
     <!-- 趋势图表 -->
-    <el-row :gutter="20" style="margin-top: 20px">
-      <el-col :span="24">
-        <el-card class="dashboard-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <div class="header-title">
-                <el-icon class="title-icon"><TrendCharts /></el-icon>
-                <span>电费趋势</span>
-              </div>
-            </div>
-          </template>
-          <div v-if="chartLoading" class="loading-container">
-            <el-skeleton :rows="5" animated />
+    <el-card class="chart-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <div class="header-title">
+            <el-icon class="title-icon"><TrendCharts /></el-icon>
+            <span>电费趋势</span>
           </div>
-          <div v-else-if="hasChartData" ref="chartContainer" class="chart-container"></div>
-          <el-empty v-else description="暂无图表数据" :image-size="100" />
-        </el-card>
-      </el-col>
-    </el-row>
+          <div class="chart-controls">
+            <el-radio-group v-model="chartViewMode" size="small" @change="onChartViewModeChange">
+              <el-radio-button value="monthly">按月</el-radio-button>
+              <el-radio-button value="daily">按日</el-radio-button>
+            </el-radio-group>
+            <el-date-picker
+              v-if="chartViewMode === 'daily'"
+              v-model="selectedMonth"
+              type="month"
+              placeholder="选择月份"
+              format="YYYY年MM月"
+              value-format="YYYY-MM"
+              size="small"
+              style="margin-left: 10px;"
+              @change="onSelectedMonthChange"
+            />
+          </div>
+        </div>
+      </template>
+      <div v-if="chartLoading" class="loading-container">
+        <el-skeleton :rows="5" animated />
+      </div>
+      <div v-else-if="hasChartData" ref="chartContainer" class="chart-container"></div>
+      <el-empty v-else description="暂无图表数据" :image-size="100" />
+    </el-card>
+
+    <!-- 告警规则编辑对话框 -->
+    <el-dialog
+      v-model="showRuleDialog"
+      :title="alertRule ? '编辑告警规则' : '创建告警规则'"
+      width="600px"
+    >
+      <el-form :model="ruleForm" label-width="140px" :rules="formRules" ref="formRef">
+        <el-form-item label="宿舍号">
+          <el-input v-model="ruleForm.dorm_number" disabled />
+        </el-form-item>
+        <el-form-item label="房间ID（room_id）">
+          <el-input 
+            v-model="ruleForm.room_id" 
+            placeholder="请输入房间ID（通过抓包获取，如：5699）"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            用于查询电费数据，需要通过抓包工具获取
+          </div>
+        </el-form-item>
+        <el-form-item label="空调告警阈值（度）">
+          <el-input-number v-model="ruleForm.kthreshold" :min="0" :precision="2" style="width: 100%" />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            当空调余量低于此值时触发告警
+          </div>
+        </el-form-item>
+        <el-form-item label="照明告警阈值（度）">
+          <el-input-number v-model="ruleForm.zthreshold" :min="0" :precision="2" style="width: 100%" />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            当照明余量低于此值时触发告警
+          </div>
+        </el-form-item>
+        <el-form-item label="启用状态">
+          <el-switch v-model="ruleForm.enabled" />
+        </el-form-item>
+        <el-form-item label="邮件告警">
+          <el-switch v-model="ruleForm.email_enabled" />
+        </el-form-item>
+        <el-form-item 
+          label="接收邮箱" 
+          v-if="ruleForm.email_enabled"
+          prop="email_address"
+        >
+          <el-input 
+            v-model="ruleForm.email_address" 
+            placeholder="请输入接收告警邮件的邮箱地址，多个邮箱用逗号分隔"
+            type="textarea"
+            :rows="2"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            多个邮箱地址请用逗号（,）分隔
+          </div>
+        </el-form-item>
+        <el-form-item label="QQ告警">
+          <el-switch v-model="ruleForm.qq_enabled" />
+        </el-form-item>
+        <el-form-item 
+          label="QQ接收者" 
+          v-if="ruleForm.qq_enabled"
+          prop="qq_receiver_id"
+        >
+          <el-input 
+            v-model="ruleForm.qq_receiver_id" 
+            placeholder="请输入QQ号（私聊）或群号（群聊）"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            输入QQ号发送私聊消息，输入群号发送群消息
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRuleDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveRule">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { 
   Refresh, 
   WindPower, 
   Sunny, 
-  InfoFilled, 
   Clock, 
-  TrendCharts 
+  TrendCharts,
+  Setting,
+  Monitor,
+  HomeFilled,
+  Plus
 } from '@element-plus/icons-vue'
-import { getLatestRecord, getRecords } from '../api/power'
+import { getLatestRecord, getRecords, getRecordsByRange } from '../api/power'
 import { manualCrawl } from '../api/system'
-import { getAllAlertRules } from '../api/alert'
-import { usePowerStore } from '../stores/power'
+import { getCurrentAlertRule, createAlertRule, updateCurrentAlertRule } from '../api/alert'
+import { getConfig } from '../api/system'
 import * as echarts from 'echarts'
 import dayjs from 'dayjs'
 
-const powerStore = usePowerStore()
 const loading = ref(false)
 const chartLoading = ref(false)
 const reloading = ref(false)
 const latestRecord = ref(null)
-const dormRecords = ref([])
+const alertRule = ref(null)
+const dormNumber = ref(null)
 const chartContainer = ref(null)
+const chartViewMode = ref('monthly') // 'monthly' 或 'daily'
+const selectedMonth = ref(dayjs().format('YYYY-MM'))
 let chartInstance = null
+let resizeHandler = null
 
-const balanceClass = computed(() => {
-  if (!latestRecord.value) return ''
-  const balance = latestRecord.value.kbalance !== null && latestRecord.value.kbalance !== undefined 
-    ? latestRecord.value.kbalance 
-    : latestRecord.value.balance
-  if (balance < 10) return 'balance-low'
-  if (balance < 20) return 'balance-warning'
-  return 'balance-normal'
-})
-
-const getBalanceClass = (balance) => {
+const getBalanceClass = (balance, threshold = null) => {
   if (balance === null || balance === undefined) return ''
+  
+  // 如果提供了阈值，使用阈值来判断
+  if (threshold !== null && threshold !== undefined) {
+    if (balance < threshold) return 'balance-low'
+    if (balance < threshold * 1.5) return 'balance-warning' // 阈值到1.5倍阈值之间显示警告
+    return 'balance-normal'
+  }
+  
+  // 如果没有阈值，使用默认值
   if (balance < 10) return 'balance-low'
   if (balance < 20) return 'balance-warning'
   return 'balance-normal'
@@ -180,21 +317,16 @@ const formatTime = (time) => {
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
 }
 
-const refreshData = async () => {
-  await loadDormRecords()
-  await loadChartData()
-}
-
 const reloadData = async () => {
   reloading.value = true
   try {
     const response = await manualCrawl()
-    // 响应拦截器已经返回了 response.data，所以直接使用 response
     if (response.success) {
       ElMessage.success(response.message || '数据获取成功')
-      // 等待一秒后刷新显示，确保数据已保存
       setTimeout(async () => {
-        await refreshData()
+        await loadDormRecord()
+        await loadAlertRule()
+        await loadChartData()
       }, 1000)
     } else {
       ElMessage.error(response.message || '数据获取失败')
@@ -206,95 +338,37 @@ const reloadData = async () => {
   }
 }
 
-const loadDormRecords = async () => {
+const loadDormRecord = async () => {
+  if (!dormNumber.value) return
+  
   loading.value = true
   try {
-    // 获取所有告警规则中的宿舍号
-    const rules = await getAllAlertRules()
-    const enabledRules = rules.filter(rule => rule.enabled)
-    
-    if (enabledRules.length === 0) {
-      dormRecords.value = []
-      latestRecord.value = null
-      loading.value = false
-      return
-    }
-    
-    // 获取每个宿舍的最新记录
-    const records = await Promise.allSettled(
-      enabledRules.map(rule => getLatestRecord(rule.dorm_number))
-    )
-    
-    dormRecords.value = records
-      .map((result, index) => {
-        if (result.status === 'fulfilled') {
-          return result.value
-        } else {
-          // 如果获取失败（404等），返回null但保留宿舍号信息
-          return {
-            dorm_number: enabledRules[index].dorm_number,
-            record_time: null,
-            kbalance: null,
-            zbalance: null,
-            balance: null
-          }
-        }
-      })
-      .filter(record => record !== null)
-    
-    // 保留第一个记录作为latestRecord（兼容旧代码）
-    if (dormRecords.value.length > 0) {
-      latestRecord.value = dormRecords.value[0]
-    } else {
-      latestRecord.value = null
-    }
+    const record = await getLatestRecord(dormNumber.value)
+    latestRecord.value = record
   } catch (error) {
-    ElMessage.error('获取数据失败：' + (error.response?.data?.detail || error.message))
-    dormRecords.value = []
-    latestRecord.value = null
+    if (error.response?.status === 404) {
+      latestRecord.value = null
+    } else {
+      ElMessage.error('获取数据失败：' + (error.response?.data?.detail || error.message))
+    }
   } finally {
     loading.value = false
   }
 }
 
-const loadLatestRecord = async () => {
-  // 兼容旧代码，现在使用loadDormRecords
-  await loadDormRecords()
-}
-
-const hasChartData = ref(false)
-
-const loadChartData = async () => {
-  chartLoading.value = true
-  hasChartData.value = false
+const loadAlertRule = async () => {
   try {
-    // 使用第一个有数据的宿舍号来显示图表
-    const firstDorm = dormRecords.value.find(r => r && r.dorm_number)
-    if (!firstDorm) {
-      hasChartData.value = false
-      chartLoading.value = false
-      return
-    }
-    
-    const dormNumber = firstDorm.dorm_number
-    const records = await getRecords(dormNumber, 30)
-    
-    await nextTick()
-    if (chartContainer.value && records.length > 0) {
-      initChart(records)
-      hasChartData.value = true
-    } else if (records.length === 0) {
-      hasChartData.value = false
-      console.log('暂无图表数据')
-    }
+    const rule = await getCurrentAlertRule()
+    // 如果返回null或undefined，表示没有规则
+    alertRule.value = rule || null
   } catch (error) {
-    hasChartData.value = false
-    // 如果是404或其他错误，不显示错误提示
-    if (error.response?.status !== 404) {
-      ElMessage.error('加载图表数据失败：' + (error.response?.data?.detail || error.message))
+    // 404或204都表示没有规则
+    if (error.response?.status === 404 || error.response?.status === 204) {
+      alertRule.value = null
+    } else {
+      console.error('获取告警规则失败：', error)
+      alertRule.value = null
     }
-  } finally {
-    chartLoading.value = false
   }
 }
 
@@ -312,7 +386,10 @@ const getDormStatusType = (record) => {
 }
 
 const getDormStatusText = (record) => {
-  if (!record || !record.record_time) return '无数据'
+  if (!record || !record.record_time) {
+    if (!alertRule.value || !alertRule.value.room_id) return '需配置room_id'
+    return '无数据'
+  }
   const kbalance = record.kbalance !== null && record.kbalance !== undefined ? record.kbalance : record.balance
   const zbalance = record.zbalance
   const minBalance = Math.min(
@@ -324,21 +401,301 @@ const getDormStatusText = (record) => {
   return '正常'
 }
 
-const initChart = (records) => {
+// 告警规则编辑相关
+const showRuleDialog = ref(false)
+const formRef = ref(null)
+const ruleForm = ref({
+  dorm_number: '',
+  room_id: '',
+  kthreshold: 20.0,
+  zthreshold: 20.0,
+  enabled: true,
+  email_enabled: false,
+  email_address: '',
+  qq_enabled: false,
+  qq_receiver_id: ''
+})
+
+const formRules = {
+  email_address: [
+    { 
+      validator: (rule, value, callback) => {
+        if (ruleForm.value.email_enabled) {
+          if (!value || !value.trim()) {
+            callback(new Error('启用邮件告警时必须输入接收邮箱地址'))
+          } else {
+            const emails = value.split(',').map(e => e.trim()).filter(e => e)
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+            for (const email of emails) {
+              if (!emailRegex.test(email)) {
+                callback(new Error(`邮箱格式不正确: ${email}`))
+                return
+              }
+            }
+            callback()
+          }
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
+  qq_receiver_id: [
+    {
+      validator: (rule, value, callback) => {
+        if (ruleForm.value.qq_enabled) {
+          if (!value || !value.trim()) {
+            callback(new Error('启用QQ告警时必须输入接收QQ号或群号'))
+          } else {
+            const qqStr = value.trim()
+            const qqRegex = /^\d+$/
+            if (!qqRegex.test(qqStr)) {
+              callback(new Error('QQ号或群号必须是数字'))
+              return
+            }
+            callback()
+          }
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+}
+
+const editRule = () => {
+  if (!alertRule.value) {
+    showRuleDialog.value = true
+    return
+  }
+  
+  ruleForm.value = {
+    dorm_number: alertRule.value.dorm_number || dormNumber.value,
+    room_id: alertRule.value.room_id || '',
+    kthreshold: alertRule.value.kthreshold !== null && alertRule.value.kthreshold !== undefined ? alertRule.value.kthreshold : 20.0,
+    zthreshold: alertRule.value.zthreshold !== null && alertRule.value.zthreshold !== undefined ? alertRule.value.zthreshold : 20.0,
+    enabled: alertRule.value.enabled !== null && alertRule.value.enabled !== undefined ? alertRule.value.enabled : true,
+    email_enabled: alertRule.value.email_enabled !== null && alertRule.value.email_enabled !== undefined ? alertRule.value.email_enabled : false,
+    email_address: alertRule.value.email_address || '',
+    qq_enabled: alertRule.value.qq_enabled !== null && alertRule.value.qq_enabled !== undefined ? alertRule.value.qq_enabled : false,
+    qq_receiver_id: alertRule.value.qq_receiver_id || ''
+  }
+  showRuleDialog.value = true
+}
+
+const saveRule = async () => {
+  if (!formRef.value) return
+  
+  try {
+    await formRef.value.validate()
+    
+    if (!ruleForm.value.email_enabled) {
+      ruleForm.value.email_address = ''
+    }
+    
+    if (!ruleForm.value.qq_enabled) {
+      ruleForm.value.qq_receiver_id = ''
+    }
+    
+    const submitData = {
+      ...ruleForm.value,
+      room_id: ruleForm.value.room_id && ruleForm.value.room_id.trim() ? ruleForm.value.room_id.trim() : null,
+      email_address: ruleForm.value.email_address && ruleForm.value.email_address.trim() ? ruleForm.value.email_address.trim() : null,
+      qq_receiver_id: ruleForm.value.qq_receiver_id && ruleForm.value.qq_receiver_id.trim() ? ruleForm.value.qq_receiver_id.trim() : null
+    }
+    
+    if (alertRule.value) {
+      await updateCurrentAlertRule(submitData)
+      ElMessage.success('更新成功')
+    } else {
+      await createAlertRule(submitData)
+      ElMessage.success('创建成功')
+    }
+    showRuleDialog.value = false
+    await loadAlertRule()
+    await loadDormRecord()
+  } catch (error) {
+    if (error !== false) {
+      ElMessage.error('保存失败：' + (error.message || error))
+    }
+  }
+}
+
+// 图表相关
+const hasChartData = ref(false)
+
+const loadChartData = async () => {
+  if (!dormNumber.value) return
+  
+  chartLoading.value = true
+  hasChartData.value = false
+  
+  try {
+    let records = []
+    
+    if (chartViewMode.value === 'monthly') {
+      // 按月显示：近一年12个月每月电量
+      const endDate = dayjs()
+      const startDate = endDate.subtract(11, 'month').startOf('month')
+      records = await getRecordsByRange(dormNumber.value, startDate.toDate(), endDate.toDate())
+      
+      // 按月份分组，计算每月总用电量
+      const monthlyData = {}
+      records.forEach(record => {
+        const month = dayjs(record.record_time).format('YYYY-MM')
+        if (!monthlyData[month]) {
+          monthlyData[month] = {
+            kconsumption: 0,
+            zconsumption: 0,
+            records: []
+          }
+        }
+        monthlyData[month].records.push(record)
+      })
+      
+      // 计算每月用电量（取最后一条记录的余量 - 第一条记录的余量，或累计consumption）
+      const monthlyRecords = []
+      Object.keys(monthlyData).sort().forEach(month => {
+        const monthRecords = monthlyData[month].records.sort((a, b) => 
+          new Date(a.record_time) - new Date(b.record_time)
+        )
+        if (monthRecords.length > 0) {
+          const first = monthRecords[0]
+          const last = monthRecords[monthRecords.length - 1]
+          
+          let kconsumption = 0
+          let zconsumption = 0
+          
+          // 累计consumption或计算差值
+          monthRecords.forEach((r, idx) => {
+            if (idx > 0 && r.kpower_consumption !== null && r.kpower_consumption !== undefined) {
+              kconsumption += r.kpower_consumption
+            }
+            if (idx > 0 && r.zpower_consumption !== null && r.zpower_consumption !== undefined) {
+              zconsumption += r.zpower_consumption
+            }
+          })
+          
+          // 如果没有consumption数据，使用差值
+          if (kconsumption === 0 && first.kbalance !== null && last.kbalance !== null) {
+            kconsumption = Math.max(0, first.kbalance - last.kbalance)
+          }
+          if (zconsumption === 0 && first.zbalance !== null && last.zbalance !== null) {
+            zconsumption = Math.max(0, first.zbalance - last.zbalance)
+          }
+          
+          monthlyRecords.push({
+            month,
+            kconsumption,
+            zconsumption,
+            total: kconsumption + zconsumption
+          })
+        }
+      })
+      
+      await nextTick()
+      if (chartContainer.value && monthlyRecords.length > 0) {
+        initMonthlyChart(monthlyRecords)
+        hasChartData.value = true
+      } else {
+        hasChartData.value = false
+      }
+    } else {
+      // 按日显示：选中月份中每一天的电量
+      const startDate = dayjs(selectedMonth.value).startOf('month')
+      const endDate = dayjs(selectedMonth.value).endOf('month')
+      records = await getRecordsByRange(dormNumber.value, startDate.toDate(), endDate.toDate())
+      
+      // 按日期分组
+      const dailyData = {}
+      records.forEach(record => {
+        const day = dayjs(record.record_time).format('YYYY-MM-DD')
+        if (!dailyData[day]) {
+          dailyData[day] = []
+        }
+        dailyData[day].push(record)
+      })
+      
+      // 计算每天用电量
+      const dailyRecords = []
+      Object.keys(dailyData).sort().forEach(day => {
+        const dayRecords = dailyData[day].sort((a, b) => 
+          new Date(a.record_time) - new Date(b.record_time)
+        )
+        if (dayRecords.length > 0) {
+          let kconsumption = 0
+          let zconsumption = 0
+          
+          dayRecords.forEach((r, idx) => {
+            if (idx > 0 && r.kpower_consumption !== null && r.kpower_consumption !== undefined) {
+              kconsumption += r.kpower_consumption
+            }
+            if (idx > 0 && r.zpower_consumption !== null && r.zpower_consumption !== undefined) {
+              zconsumption += r.zpower_consumption
+            }
+          })
+          
+          if (dayRecords.length > 1) {
+            const first = dayRecords[0]
+            const last = dayRecords[dayRecords.length - 1]
+            if (kconsumption === 0 && first.kbalance !== null && last.kbalance !== null) {
+              kconsumption = Math.max(0, first.kbalance - last.kbalance)
+            }
+            if (zconsumption === 0 && first.zbalance !== null && last.zbalance !== null) {
+              zconsumption = Math.max(0, first.zbalance - last.zbalance)
+            }
+          }
+          
+          dailyRecords.push({
+            day,
+            kconsumption,
+            zconsumption,
+            total: kconsumption + zconsumption
+          })
+        }
+      })
+      
+      await nextTick()
+      if (chartContainer.value && dailyRecords.length > 0) {
+        initDailyChart(dailyRecords)
+        hasChartData.value = true
+      } else {
+        hasChartData.value = false
+      }
+    }
+  } catch (error) {
+    hasChartData.value = false
+    if (error.response?.status && error.response.status !== 404) {
+      ElMessage.error('加载图表数据失败：' + (error.response?.data?.detail || error.message))
+    }
+  } finally {
+    chartLoading.value = false
+  }
+}
+
+const onChartViewModeChange = () => {
+  loadChartData()
+}
+
+const onSelectedMonthChange = () => {
+  if (chartViewMode.value === 'daily') {
+    loadChartData()
+  }
+}
+
+const initMonthlyChart = (monthlyRecords) => {
   if (!chartContainer.value) return
   
   if (!chartInstance) {
     chartInstance = echarts.init(chartContainer.value)
   }
   
-  const dates = records.map(r => dayjs(r.record_time).format('MM-DD HH:mm')).reverse()
-  
-  // 提取空调余量和照明余量
-  const kbalances = records.map(r => r.kbalance !== null && r.kbalance !== undefined ? r.kbalance : r.balance).reverse()
-  const zbalances = records.map(r => r.zbalance !== null && r.zbalance !== undefined ? r.zbalance : null).reverse()
-  
-  // 检查是否有照明余量数据
-  const hasZBalance = zbalances.some(b => b !== null)
+  const months = monthlyRecords.map(r => dayjs(r.month).format('MM月'))
+  const kconsumptions = monthlyRecords.map(r => r.kconsumption)
+  const zconsumptions = monthlyRecords.map(r => r.zconsumption)
+  const hasZConsumption = zconsumptions.some(v => v > 0)
   
   const option = {
     tooltip: {
@@ -346,15 +703,12 @@ const initChart = (records) => {
       backgroundColor: 'rgba(50, 50, 50, 0.9)',
       borderColor: '#667eea',
       borderWidth: 1,
-      textStyle: {
-        color: '#fff'
-      },
+      textStyle: { color: '#fff' },
       formatter: (params) => {
         let result = `<div style="font-weight: bold; margin-bottom: 5px;">${params[0].name}</div>`
         params.forEach(param => {
-          const color = param.color
           result += `<div style="margin: 3px 0;">
-            <span style="display: inline-block; width: 10px; height: 10px; background: ${color}; border-radius: 50%; margin-right: 5px;"></span>
+            <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; border-radius: 50%; margin-right: 5px;"></span>
             ${param.seriesName}: <span style="font-weight: bold;">${param.value.toFixed(2)} 度</span>
           </div>`
         })
@@ -362,11 +716,8 @@ const initChart = (records) => {
       }
     },
     legend: {
-      data: hasZBalance ? ['空调余量', '照明余量'] : ['空调余量'],
-      top: 10,
-      textStyle: {
-        fontSize: 12
-      }
+      data: hasZConsumption ? ['空调用电量', '照明用电量'] : ['空调用电量'],
+      top: 10
     },
     grid: {
       left: '3%',
@@ -377,119 +728,149 @@ const initChart = (records) => {
     },
     xAxis: {
       type: 'category',
-      data: dates,
-      axisLabel: {
-        rotate: 45,
-        fontSize: 11
-      },
-      axisLine: {
-        lineStyle: {
-          color: '#e0e0e0'
-        }
-      }
+      data: months,
+      axisLabel: { fontSize: 11 },
+      axisLine: { lineStyle: { color: '#e0e0e0' } }
     },
     yAxis: {
       type: 'value',
-      name: '余量（度）',
-      nameTextStyle: {
-        fontSize: 12
-      },
-      axisLabel: {
-        formatter: '{value}'
-      },
-      splitLine: {
-        lineStyle: {
-          type: 'dashed',
-          color: '#e0e0e0'
-        }
-      }
+      name: '用电量（度）',
+      nameTextStyle: { fontSize: 12 },
+      axisLabel: { formatter: '{value}' },
+      splitLine: { lineStyle: { type: 'dashed', color: '#e0e0e0' } }
     },
     series: [
       {
-        name: '空调余量',
-        data: kbalances,
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: 'rgba(102, 126, 234, 0.3)' },
-              { offset: 1, color: 'rgba(102, 126, 234, 0.05)' }
-            ]
-          }
-        },
-        lineStyle: {
-          color: '#667eea',
-          width: 2
-        },
-        itemStyle: {
-          color: '#667eea',
-          borderColor: '#fff',
-          borderWidth: 2
-        }
+        name: '空调用电量',
+        data: kconsumptions,
+        type: 'bar',
+        itemStyle: { color: '#667eea' }
       }
     ]
   }
   
-  // 如果有照明余量数据，添加照明余量系列
-  if (hasZBalance) {
+  if (hasZConsumption) {
     option.series.push({
-      name: '照明余量',
-      data: zbalances,
-      type: 'line',
-      smooth: true,
-      symbol: 'circle',
-      symbolSize: 6,
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(103, 194, 58, 0.3)' },
-            { offset: 1, color: 'rgba(103, 194, 58, 0.05)' }
-          ]
-        }
-      },
-      lineStyle: {
-        color: '#67c23a',
-        width: 2
-      },
-      itemStyle: {
-        color: '#67c23a',
-        borderColor: '#fff',
-        borderWidth: 2
-      }
+      name: '照明用电量',
+      data: zconsumptions,
+      type: 'bar',
+      itemStyle: { color: '#67c23a' }
     })
   }
   
   chartInstance.setOption(option, true)
+}
+
+const initDailyChart = (dailyRecords) => {
+  if (!chartContainer.value) return
   
-  // 响应式调整
-  const resizeHandler = () => {
-    chartInstance?.resize()
+  if (!chartInstance) {
+    chartInstance = echarts.init(chartContainer.value)
   }
-  window.addEventListener('resize', resizeHandler)
   
-  // 组件卸载时移除监听器
-  onMounted(() => {
-    return () => {
-      window.removeEventListener('resize', resizeHandler)
-    }
-  })
+  const days = dailyRecords.map(r => dayjs(r.day).format('DD日'))
+  const kconsumptions = dailyRecords.map(r => r.kconsumption)
+  const zconsumptions = dailyRecords.map(r => r.zconsumption)
+  const hasZConsumption = zconsumptions.some(v => v > 0)
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(50, 50, 50, 0.9)',
+      borderColor: '#667eea',
+      borderWidth: 1,
+      textStyle: { color: '#fff' },
+      formatter: (params) => {
+        let result = `<div style="font-weight: bold; margin-bottom: 5px;">${params[0].name}</div>`
+        params.forEach(param => {
+          result += `<div style="margin: 3px 0;">
+            <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; border-radius: 50%; margin-right: 5px;"></span>
+            ${param.seriesName}: <span style="font-weight: bold;">${param.value.toFixed(2)} 度</span>
+          </div>`
+        })
+        return result
+      }
+    },
+    legend: {
+      data: hasZConsumption ? ['空调用电量', '照明用电量'] : ['空调用电量'],
+      top: 10
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '10%',
+      top: '15%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: days,
+      axisLabel: { rotate: 45, fontSize: 11 },
+      axisLine: { lineStyle: { color: '#e0e0e0' } }
+    },
+    yAxis: {
+      type: 'value',
+      name: '用电量（度）',
+      nameTextStyle: { fontSize: 12 },
+      axisLabel: { formatter: '{value}' },
+      splitLine: { lineStyle: { type: 'dashed', color: '#e0e0e0' } }
+    },
+    series: [
+      {
+        name: '空调用电量',
+        data: kconsumptions,
+        type: 'bar',
+        itemStyle: { color: '#667eea' }
+      }
+    ]
+  }
+  
+  if (hasZConsumption) {
+    option.series.push({
+      name: '照明用电量',
+      data: zconsumptions,
+      type: 'bar',
+      itemStyle: { color: '#67c23a' }
+    })
+  }
+  
+  chartInstance.setOption(option, true)
 }
 
 onMounted(async () => {
-  await refreshData()
+  // 获取配置中的宿舍号
+  try {
+    const config = await getConfig()
+    dormNumber.value = config.dorm_number
+    ruleForm.value.dorm_number = config.dorm_number
+  } catch (error) {
+    // 404错误可能是后端服务未启动，不显示错误提示
+    if (error.response?.status !== 404) {
+      ElMessage.error('获取配置失败：' + (error.response?.data?.detail || error.message))
+    } else {
+      console.warn('后端服务可能未启动，无法获取配置')
+    }
+  }
+  
+  await loadDormRecord()
+  await loadAlertRule()
+  await loadChartData()
+  
+  // 响应式调整图表
+  resizeHandler = () => {
+    chartInstance?.resize()
+  }
+  window.addEventListener('resize', resizeHandler)
+})
+
+onUnmounted(() => {
+  if (resizeHandler) {
+    window.removeEventListener('resize', resizeHandler)
+  }
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
 })
 </script>
 
@@ -500,14 +881,51 @@ onMounted(async () => {
   padding: 0;
 }
 
-.dashboard-card {
-  margin-bottom: 20px;
-  border-radius: 8px;
+/* 页面标题 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 0 4px;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0;
+}
+
+.title-icon {
+  margin-right: 8px;
+  font-size: 28px;
+  color: #667eea;
+}
+
+.page-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* 卡片通用样式 */
+.dorm-card,
+.alert-rule-card,
+.chart-card {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
 }
 
-.dashboard-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.dorm-card:hover,
+.alert-rule-card:hover,
+.chart-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
 }
 
 .card-header {
@@ -537,71 +955,109 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.loading-container {
-  padding: 40px 20px;
+.dorm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.status-content {
-  padding: 10px;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-/* 余量卡片样式 */
+.dorm-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dorm-icon {
+  font-size: 20px;
+  color: #667eea;
+}
+
+.dorm-number-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.status-tag {
+  font-weight: 500;
+}
+
+.dorm-content {
+  padding: 20px 0;
+}
+
+.dorm-no-data {
+  padding: 20px 0;
+  text-align: center;
+}
+
+/* 余额卡片样式 */
 .balance-card {
-  margin-bottom: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
   border-radius: 12px;
-  overflow: hidden;
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid #e4e7ed;
   transition: all 0.3s ease;
-  border: none;
 }
 
 .balance-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
 
-.balance-header {
+.balance-card-ac {
+  border-left: 4px solid #667eea;
+}
+
+.balance-card-light {
+  border-left: 4px solid #67c23a;
+}
+
+.balance-card-header {
   display: flex;
   align-items: center;
-  padding: 10px;
+  margin-bottom: 12px;
 }
 
 .balance-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  margin-right: 20px;
-  flex-shrink: 0;
+  font-size: 24px;
+  margin-right: 8px;
+  color: #909399;
 }
 
-.ac-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+.balance-card-ac .balance-icon {
+  color: #667eea;
 }
 
-.light-icon {
-  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-  color: white;
-}
-
-.balance-info {
-  flex: 1;
+.balance-card-light .balance-icon {
+  color: #67c23a;
 }
 
 .balance-label {
   font-size: 14px;
   color: #909399;
-  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .balance-value {
   font-size: 32px;
-  font-weight: bold;
+  font-weight: 700;
   line-height: 1.2;
   font-family: 'Arial', sans-serif;
+}
+
+.balance-unit {
+  font-size: 18px;
+  font-weight: 500;
+  margin-left: 4px;
+  opacity: 0.7;
 }
 
 .balance-low {
@@ -616,130 +1072,116 @@ onMounted(async () => {
   color: #67c23a;
 }
 
-/* 图表容器 */
+.dorm-time {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #909399;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.dorm-time .el-icon {
+  margin-right: 6px;
+  font-size: 14px;
+}
+
+.alert-rule-content {
+  padding: 8px 0;
+}
+
+.alert-rule-content :deep(.el-descriptions) {
+  margin-bottom: 16px;
+}
+
+.alert-rule-content :deep(.el-descriptions__label) {
+  font-weight: 600;
+  color: #606266;
+  width: 160px;
+}
+
+.alert-rule-content :deep(.el-descriptions__content) {
+  color: #303133;
+}
+
+.alert-rule-empty {
+  padding: 60px 20px;
+  text-align: center;
+}
+
 .chart-container {
   height: 450px;
   width: 100%;
   min-height: 300px;
 }
 
-/* 宿舍卡片样式 */
-.dorm-card {
-  margin-bottom: 20px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.dorm-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.dorm-header {
+.chart-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
 }
 
-.dorm-content {
-  padding: 10px 0;
+.loading-container {
+  padding: 40px 20px;
 }
 
-.dorm-balance-item {
-  margin-bottom: 15px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.dorm-balance-item:last-child {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-.balance-item-label {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 8px;
-}
-
-.balance-item-label .el-icon {
-  margin-right: 5px;
-}
-
-.balance-item-value {
-  font-size: 24px;
-  font-weight: bold;
-  line-height: 1.2;
-}
-
-.dorm-time {
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-  color: #909399;
-  margin-top: 10px;
-}
-
-.dorm-time .el-icon {
-  margin-right: 5px;
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
   .dashboard {
-    padding: 0 10px;
+    padding: 0 12px;
   }
-  
-  .card-header {
+
+  .page-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 16px;
   }
-  
-  .header-actions {
+
+  .page-actions {
     width: 100%;
     justify-content: flex-start;
   }
-  
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .chart-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .balance-value {
-    font-size: 24px;
+    font-size: 28px;
   }
-  
-  .balance-icon {
-    width: 50px;
-    height: 50px;
-    font-size: 24px;
-    margin-right: 15px;
+
+  .balance-unit {
+    font-size: 16px;
   }
-  
+
   .chart-container {
     height: 350px;
   }
-  
-  .dorm-balance-item {
-    margin-bottom: 12px;
-    padding-bottom: 12px;
+
+  .dorm-number-text {
+    font-size: 16px;
   }
-  
-  .balance-item-value {
+}
+
+@media (max-width: 480px) {
+  .page-title {
     font-size: 20px;
   }
-}
 
-/* 描述列表优化 */
-:deep(.el-descriptions__label) {
-  font-weight: 600;
-  color: #606266;
-}
+  .balance-value {
+    font-size: 24px;
+  }
 
-:deep(.el-descriptions__content) {
-  color: #303133;
-}
-
-/* 标签样式 */
-:deep(.el-tag) {
-  font-weight: 500;
+  .chart-container {
+    height: 300px;
+  }
 }
 </style>

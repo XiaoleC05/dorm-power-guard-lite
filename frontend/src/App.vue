@@ -17,10 +17,6 @@
             <el-icon><Document /></el-icon>
             <span>电费记录</span>
           </el-menu-item>
-          <el-menu-item index="/alert-rules">
-            <el-icon><Setting /></el-icon>
-            <span>告警规则</span>
-          </el-menu-item>
           <el-menu-item index="/alert-logs">
             <el-icon><Bell /></el-icon>
             <span>告警日志</span>
@@ -37,7 +33,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Monitor, Document, Setting, Bell } from '@element-plus/icons-vue'
+import { Monitor, Document, Bell } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)
@@ -97,8 +93,8 @@ body {
 }
 
 .app-main {
-  padding: 20px;
-  background-color: #f5f7fa;
+  padding: 24px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
   min-height: calc(100vh - 60px);
 }
 </style>

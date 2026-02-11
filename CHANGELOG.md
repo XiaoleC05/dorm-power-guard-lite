@@ -2,136 +2,67 @@
 
 ## [未发布] - 2026-02-11
 
-### 新增功能
+### 数据库优化
 
-#### 多宿舍支持
-- ✅ 添加 `room_id` 字段到告警规则表
-- ✅ 爬虫服务支持遍历所有启用的告警规则
-- ✅ 为每个宿舍使用对应的 `room_id` 获取电费数据
-- ✅ 前端添加 `room_id` 输入框和显示
+#### 数据库模式细化
+- ✅ 细化数据库模型字段注释，确保所有字段都有清晰的说明
+- ✅ 更新数据库初始化SQL脚本，确保字段注释与模型一致
+- ✅ 更新Pydantic schemas，确保字段注释准确
+- ✅ 删除数据库中多余的表（admins, users, dorm_submissions, login_attempts, multi_dorm_requests, submission_limits）
+- ✅ 数据库现在只包含3个必需的表：power_records, alert_rules, alert_logs
 
-#### 告警规则优化
-- ✅ 移除全局配置作为接收方的逻辑
-- ✅ 接收方必须从告警规则中配置（email_address、qq_receiver_id）
-- ✅ 发送方使用全局配置（EMAIL_FROM、QQ_BOT_SENDER_ID）
-- ✅ 启用告警时必须填写接收方信息（前端和后端验证）
+#### 数据库管理脚本
+- ✅ 添加 `list_tables.sql` 和 `list_tables.bat` - 查看数据库所有表
+- ✅ 添加 `drop_unused_tables.py` - 自动检测并删除多余表的Python脚本（推荐）
+- ✅ 添加 `drop_unused_tables.sql` 和 `drop_unused_tables.bat` - SQL方式删除多余表
 
-#### QQ接收者配置
-- ✅ 添加 `qq_receiver_id` 字段到告警规则
-- ✅ 支持为每个规则配置独立的QQ接收者
-- ✅ 自动判断群号（>=1000000000）或用户QQ号
-- ✅ 前端显示数据库中保存的QQ号
+### 脚本优化
 
-#### 监控面板优化
-- ✅ 显示多个宿舍的信息（从告警规则获取）
-- ✅ 每个宿舍独立显示卡片
-- ✅ 状态标签（正常/警告/低电量）
+#### 统一启动脚本
+- ✅ 创建 `start-all-complete.bat` - 一键启动所有服务的批处理脚本
+- ✅ 创建 `start-all-complete.ps1` - 一键启动所有服务的PowerShell脚本（功能更强大）
+- ✅ 创建 `stop-all.bat` - 一键停止所有服务的脚本
+- ✅ 自动检测并停止已运行的服务
+- ✅ 按顺序启动：后端 → NoneBot → NapCatQQ → 前端
+- ✅ 显示服务状态和用户操作提示（如NapCatQQ登录）
+- ✅ 自动检查依赖并安装
+- ✅ 自动复制NapCat配置文件
 
-### 修改
+#### 删除多余脚本
+- ✅ 删除 `start-all.bat` - 旧的启动脚本，已被统一脚本替代
+- ✅ 删除 `backend/nonebot_bot/start.bat` - 单独启动NoneBot脚本，已被统一脚本替代
+- ✅ 删除 `backend/nonebot_bot/start-napcat.bat` - 单独启动NapCat脚本，已被统一脚本替代
+- ✅ 删除 `backend/nonebot_bot/start-napcat-shell.bat` - NapCat Shell版本启动脚本
+- ✅ 更新文档，移除对已删除脚本的引用
 
-- 🔄 爬虫类 `fetch_power_data()` 支持传入 `dorm_number` 和 `room_id` 参数
-- 🔄 爬虫服务 `crawl_and_save()` 改为遍历所有启用的告警规则
-- 🔄 告警发送逻辑：接收方必须从规则中获取，不能使用全局配置
-- 🔄 前端表单验证：启用告警时必须填写接收方信息
+### 文档整理
 
-### 数据库迁移
+#### 文档合并和优化
+- ✅ 删除多余的文档文件，只保留核心文档（README.md, 技术栈文档.md, CHANGELOG.md）
+- ✅ 将前端组件开发规范合并到技术栈文档中
+- ✅ 更新所有文档，确保与最新代码一致
+- ✅ 明确文档维护原则：不再生成多余的文档和测试内容，只更新现有文档
 
-- ✅ `add_room_id.py` - 添加 `room_id` 字段到 `alert_rules` 表
-- ✅ `add_qq_receiver_id.py` - 添加 `qq_receiver_id` 字段到 `alert_rules` 表
+### 功能优化
+
+- ✅ 单一宿舍监控：项目重构为仅监控配置文件中设置的宿舍号
+- ✅ 告警规则优化：接收方必须从告警规则中配置，移除全局配置作为接收方的逻辑
+- ✅ 监控面板优化：整合告警规则配置到监控面板，页面简洁
+- ✅ 定时任务优化：从每天指定时间点改为每小时执行一次
 
 ---
 
 ## [1.0.0] - 2026-02-11
 
-### 新增功能
+### 核心功能
 
-#### QQ机器人集成
-- ✅ 集成 NoneBot 框架
-- ✅ 使用 NapCatQQ 作为 OneBot 实现
-- ✅ WebSocket 反向连接
-- ✅ HTTP API 接口（发送群消息、私聊消息）
-
-#### 告警系统
-- ✅ 邮件告警功能
-- ✅ QQ告警功能
+- ✅ 定时爬取电费数据（每小时执行一次）
+- ✅ 邮件和QQ告警功能
 - ✅ 防频繁告警机制（1小时窗口）
-- ✅ 告警日志记录
-
-#### 爬虫系统
-- ✅ 定时爬取电费数据（APScheduler）
-- ✅ 自动刷新认证信息
-- ✅ 支持空调和照明分类监控
-
-#### 前端界面
-- ✅ 监控面板（Dashboard）
-- ✅ 告警规则管理
-- ✅ 告警日志查看
-- ✅ 数据可视化（ECharts）
-
-### 技术选型
-
-- **后端**: FastAPI + SQLAlchemy + APScheduler
-- **前端**: Vue.js 3 + Element Plus + ECharts
-- **数据库**: MySQL
-- **QQ机器人**: NoneBot + NapCatQQ
-
-### 已知问题
-
-- ⚠️ 需要手动配置 `room_id` 才能获取不同宿舍的数据
-- ⚠️ NapCatQQ 需要手动登录和连接
+- ✅ Web监控面板和数据可视化
+- ✅ 单一宿舍监控支持
 
 ---
-
-## 开发历程
-
-### 2026-02-11
-
-#### 主要开发内容
-- 完成基础功能开发（爬虫、告警系统、前端界面）
-- 集成 QQ 机器人（NoneBot + NapCatQQ）
-- 实现多宿舍支持
-- 优化告警规则配置（移除全局配置作为接收方）
-- 文档整理和优化（合并技术文档，删除冗余文档和代码）
-
----
-
-## 故障排查记录
-
-### QQ机器人连接问题
-
-**问题**: NapCatQQ 无法连接到 NoneBot
-
-**解决方案**:
-1. 检查配置文件路径
-2. 确保 WebSocket 路径正确：`ws://localhost:8080/onebot/v11/ws`
-3. 重启 NapCatQQ 和 NoneBot
-
-### 告警发送失败
-
-**问题**: QQ告警发送失败，提示 "There are no bots to get"
-
-**解决方案**:
-1. 检查 NapCatQQ 是否运行
-2. 检查连接状态：`GET /api/get_status`
-3. 重启 NapCatQQ
-
-### 群消息发送失败
-
-**问题**: 群消息发送失败，提示 "你已被移出该群"
-
-**解决方案**:
-1. 确保机器人已加入群聊
-2. 或改用私聊告警（清空 `QQ_BOT_GROUP_ID`）
-
----
-
-## 未来计划
-
-- [ ] 支持更多宿舍的批量导入
-- [ ] 添加数据导出功能
-- [ ] 优化爬虫性能
-- [ ] 添加更多告警渠道（微信、短信等）
-- [ ] 支持自定义告警消息模板
 
 ---
 

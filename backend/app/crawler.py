@@ -146,13 +146,15 @@ class PowerCrawler:
             dorm_number: 宿舍号（可选，如果不提供则使用self.dorm_number）
             room_id: 房间ID（可选，如果不提供则使用self.room_id）
         
-        返回格式：{
-            'dorm_number': '宿舍号',
-            'balance': 余量（度，优先返回空调余量）,
-            'kbalance': 空调余量（度）,
-            'zbalance': 照明余量（度）,
-            'power_consumption': 用电量（度，已废弃）
-        }
+        Returns:
+            dict: {
+                'dorm_number': '宿舍号',
+                'balance': 余量（度，优先返回空调余量）,
+                'kbalance': 空调余量（度）,
+                'zbalance': 照明余量（度）,
+                'power_consumption': None  # 已废弃，使用kpower_consumption和zpower_consumption
+            }
+        
         注意：用电量差值（kpower_consumption和zpower_consumption）在保存时自动计算
         """
         if not self.login():
@@ -199,7 +201,11 @@ class PowerCrawler:
             # 检查响应是否成功
             if not result.get('success', False):
                 error_msg = result.get('message', '未知错误')
-                logger.error(f"API返回失败: {error_msg}")
+                error_code = result.get('code', '')
+                logger.error(f"API返回失败: {error_msg} (code: {error_code})")
+                # 如果是认证相关错误，提供更明确的提示
+                if '认证' in error_msg or '登录' in error_msg or error_code in ['401', '403']:
+                    logger.error("认证信息可能已过期，请检查openid和JSESSIONID是否有效")
                 return None
             
             # 提取数据
@@ -207,7 +213,7 @@ class PowerCrawler:
             balance_list = result_data.get('balancelist', [])
             
             if not balance_list:
-                logger.error("响应中未找到余额数据")
+                logger.error("响应中未找到余额数据，可能是room_id不正确或该房间暂无电费数据")
                 return None
             
             # 获取第一条余额记录（通常只有一条）
@@ -235,7 +241,7 @@ class PowerCrawler:
                 'balance': balance,  # 空调余额（主要监控项）
                 'kbalance': kbalance,  # 空调余额
                 'zbalance': zbalance,  # 照明余额
-                'power_consumption': None  # 用电量（如果API有提供）
+                'power_consumption': None  # 已废弃，使用kpower_consumption和zpower_consumption
             }
             
         except requests.exceptions.RequestException as e:

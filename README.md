@@ -39,14 +39,12 @@
 
 ### 核心功能
 
-1. **定时爬虫** - 每天在指定时间点（默认：8:00, 12:00, 18:00, 22:00）自动抓取电费数据
+1. **定时爬虫** - 每小时自动抓取电费数据
 2. **数据存储** - 将电费记录存入MySQL数据库，支持历史查询
 3. **告警通知** - 余额低于阈值时自动发送邮件或QQ消息
-4. **监控面板** - Web界面查看电费状态、趋势图和用电量统计
+4. **监控面板** - Web界面查看电费状态、趋势图和用电量统计，支持告警规则配置
 5. **手动刷新** - 支持手动触发数据获取
-6. **多用户系统** - 学生注册登录，提交宿舍信息，自主管理监控
-7. **管理员系统** - 管理员账号密码登录，管理用户和监控
-8. **安全机制** - 学生确认机制防止错误提交，登录失败限制，Session管理
+6. **单一宿舍监控** - 针对配置文件中设置的openid用户的宿舍号进行监控
 
 ---
 
@@ -59,10 +57,8 @@
 - ✅ **易于部署**：支持本地部署和云服务器部署
 - ✅ **分类监控**：支持空调和照明分别设置阈值和告警
 - ✅ **防频繁告警**：1小时内不重复告警（手动触发除外）
-- ✅ **多用户支持**：学生可注册账号，提交自己的宿舍信息
-- ✅ **安全确认**：学生提交后需确认电费数据，防止误填其他宿舍
-- ✅ **提交限制**：同一邮箱每天最多提交3次，防止恶意提交
-- ✅ **管理员管理**：管理员可管理用户、审批多宿舍申请
+- ✅ **单一宿舍监控**：针对配置文件中设置的openid用户的宿舍号进行监控，告警规则最多存在一个
+- ✅ **简洁界面**：监控面板整合告警规则配置，页面整洁简约
 
 ---
 
@@ -80,19 +76,16 @@
 | APScheduler | 3.10+ | 定时任务调度 |
 | Pydantic | 2.5+ | 数据验证和序列化 |
 | Requests | 2.31+ | HTTP请求库，用于爬虫 |
-| BeautifulSoup4 | 4.12+ | HTML解析（备用） |
 | python-dotenv | 1.0+ | 环境变量管理 |
-| passlib[bcrypt] | 1.7+ | 密码哈希加密 |
-| python-jose | 3.3+ | JWT Token支持（备用） |
-| itsdangerous | 2.1+ | Session签名支持 |
+| email-validator | 2.1+ | 邮箱格式验证 |
 
 ### 前端技术
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
 | Vue | 3.3+ | 前端框架 |
-| Vue Router | 4.2+ | 路由管理 |
-| Pinia | 2.1+ | 状态管理 |
+| Vue Router | 4.2+ | 路由管理（前端页面导航） |
+| Pinia | 2.1+ | 状态管理（电费数据状态） |
 | Element Plus | 2.4+ | UI组件库 |
 | ECharts | 5.4+ | 数据可视化图表 |
 | Axios | 1.6+ | HTTP客户端 |
@@ -115,20 +108,11 @@ dorm-power-guard-lite/
 │   │   │   ├── power.py   # 电费记录API
 │   │   │   ├── alert.py   # 告警API
 │   │   │   ├── system.py  # 系统管理API
-│   │   │   ├── auth.py    # 认证API（用户/管理员登录）
-│   │   │   ├── submissions.py # 宿舍提交API
-│   │   │   ├── multi_dorm.py  # 多宿舍申请API
-│   │   │   ├── my_monitor.py  # 我的监控API
-│   │   │   ├── admin.py       # 管理员管理API
-│   │   │   └── admin_users.py # 管理员用户管理API
 │   │   ├── models.py       # 数据库模型（SQLAlchemy）
 │   │   ├── schemas.py      # Pydantic模型（数据验证）
 │   │   ├── services.py     # 业务逻辑层
 │   │   ├── crawler.py      # 爬虫模块
 │   │   ├── auth_manager.py # 认证管理模块（爬虫认证）
-│   │   ├── auth.py         # 认证服务（密码哈希、登录限制）
-│   │   ├── session.py      # Session管理
-│   │   ├── email_service.py # 邮件服务（验证邮件、密码重置）
 │   │   ├── alert.py        # 告警模块
 │   │   ├── scheduler.py    # 定时任务模块
 │   │   ├── templates.py    # 邮件模板
@@ -213,21 +197,7 @@ CREATE DATABASE dorm_power_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_c
 EXIT;
 ```
 
-#### 3.2.1 执行用户系统数据库迁移
-
-```bash
-python migrate_add_user_system.py
-```
-
-这会创建用户系统相关的表（users, admins, dorm_submissions等）。
-
-#### 3.2.2 创建管理员账号
-
-```bash
-python create_admin.py --username admin --password your_password --email admin@example.com --role super_admin
-```
-
-#### 3.3 配置环境变量
+#### 3.2 配置环境变量
 
 复制 `.env.example` 为 `.env`：
 
@@ -237,23 +207,36 @@ cp .env.example .env
 
 编辑 `.env` 文件，填入实际配置（详见[详细配置](#详细配置)章节）。
 
-#### 3.4 启动后端
+#### 3.3 启动服务
 
-**Windows系统（推荐使用批处理文件）：**
+**方式一：一键启动所有服务（推荐）**
 
-```powershell
-cd backend
-.\scripts\start\start.bat
-```
-
-或使用PowerShell脚本：
+Windows系统提供了完整的一键启动脚本，会自动启动后端、前端、NoneBot和NapCatQQ：
 
 ```powershell
-cd backend
-.\scripts\start\start.ps1
+# 批处理版本（推荐）
+.\start-all-complete.bat
+
+# PowerShell版本（功能更强大）
+.\start-all-complete.ps1
 ```
 
-**Windows系统（手动启动）：**
+此脚本会：
+- ✅ 自动检查并停止已运行的服务
+- ✅ 检查并安装依赖
+- ✅ 按顺序启动所有服务（后端 → NoneBot → NapCatQQ → 前端）
+- ✅ 显示服务状态和访问地址
+- ✅ 提示用户进行NapCatQQ登录操作（扫码或账号密码）
+
+**停止所有服务：**
+
+```powershell
+.\stop-all.bat
+```
+
+**方式二：手动启动各个服务**
+
+**启动后端：**
 
 ```powershell
 cd backend
@@ -273,6 +256,21 @@ python3 run.py
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
+**启动NoneBot QQ机器人：**
+
+```powershell
+cd backend\nonebot_bot
+python bot.py
+```
+
+**启动NapCatQQ：**
+
+```powershell
+# 手动启动NapCatQQ（如果使用一键启动脚本则不需要）
+# 确保NapCatQQ.exe在桌面，配置文件在 %USERPROFILE%\Desktop\config\onebot11.json
+# 直接运行 NapCatQQ.exe 并登录QQ即可
+```
+
 ### 4. 前端部署
 
 #### 4.1 安装依赖
@@ -290,7 +288,7 @@ npm run dev
 
 前端将在 `http://localhost:3000` 启动。
 
-#### 4.3 构建生产版本
+#### 5.3 构建生产版本
 
 ```bash
 npm run build
@@ -298,7 +296,7 @@ npm run build
 
 构建产物在 `dist/` 目录。
 
-### 5. QQ机器人配置（可选）
+### 4. QQ机器人配置（可选）
 
 如果需要使用QQ告警功能，需要配置QQ机器人：
 
@@ -594,30 +592,7 @@ mitmproxy -p 8888
 
 可在 `.env` 文件中修改 `SCHEDULER_HOURS` 配置。
 
-### 6. 用户系统功能
-
-#### 6.1 学生功能
-
-- **注册登录**：邮箱注册，邮箱验证，密码登录
-- **提交宿舍信息**：填写宿舍信息，系统立即抓取电费数据，学生确认后激活监控
-- **我的监控**：查看自己的监控列表，查看电费记录，修改告警规则
-- **多宿舍申请**：申请监控多个宿舍，等待管理员审批
-
-#### 6.2 管理员功能
-
-- **管理员登录**：账号密码登录
-- **用户管理**：查看用户列表，启用/禁用用户
-- **监控管理**：查看所有监控，编辑告警规则，手动触发抓取
-- **多宿舍审批**：审批学生的多宿舍申请
-
-#### 6.3 安全机制
-
-- **学生确认机制**：提交后立即显示电费数据，学生确认后才激活，防止误填其他宿舍
-- **提交限制**：同一邮箱每天最多提交3次
-- **登录失败限制**：5次失败后锁定30分钟
-- **Session管理**：7天自动过期，支持登出
-
-### 告警功能
+### 6. 告警功能
 
 - **邮件告警**：使用QQ邮箱发送告警邮件到指定邮箱
 - **QQ机器人告警**：支持 NoneBot QQ机器人
@@ -685,70 +660,19 @@ curl -X POST http://localhost:8000/api/alert/rules \
   }'
 ```
 
-#### 3. 用户认证API
-
-- `POST /api/auth/register` - 用户注册
-- `POST /api/auth/login` - 用户登录
-- `POST /api/auth/verify-email` - 验证邮箱
-- `POST /api/auth/logout` - 登出
-- `GET /api/auth/me` - 获取当前用户信息
-- `POST /api/auth/forgot-password` - 忘记密码
-- `POST /api/auth/reset-password` - 重置密码
-
-#### 4. 宿舍提交API
-
-- `POST /api/submissions` - 提交宿舍信息
-- `GET /api/submissions/{id}` - 获取提交详情
-- `POST /api/submissions/{id}/confirm` - 确认提交
-- `GET /api/submissions/my/list` - 我的提交列表
-- `GET /api/submissions/check-limit` - 检查提交限制
-
-#### 5. 多宿舍申请API
-
-- `POST /api/multi-dorm/request` - 提交多宿舍申请
-- `GET /api/multi-dorm/my-requests` - 我的申请列表
-
-#### 6. 我的监控API
-
-- `GET /api/my/monitors` - 我的监控列表
-- `GET /api/my/power-records/{dorm_number}` - 我的电费记录
-- `PUT /api/my/alert-rules/{dorm_number}` - 更新告警规则
-
-#### 7. 管理员认证API
-
-- `POST /api/auth/admin/login` - 管理员登录
-- `POST /api/auth/admin/logout` - 管理员登出
-- `GET /api/auth/admin/me` - 获取当前管理员信息
-
-#### 8. 管理员管理API
-
-- `GET /api/admin/admins` - 管理员列表
-- `POST /api/admin/admins` - 创建管理员（需要超级管理员）
-- `PUT /api/admin/admins/{id}` - 更新管理员（需要超级管理员）
-- `DELETE /api/admin/admins/{id}` - 删除管理员（需要超级管理员）
-- `POST /api/admin/change-password` - 修改密码
-
-#### 9. 管理员用户管理API
-
-- `GET /api/admin/users` - 用户列表
-- `GET /api/admin/users/{id}` - 用户详情
-- `PUT /api/admin/users/{id}/status` - 更新用户状态
-
-#### 10. 管理员多宿舍申请管理API
-
-- `GET /api/multi-dorm/admin/requests` - 申请列表
-- `GET /api/multi-dorm/admin/requests/{id}` - 申请详情
-- `PUT /api/multi-dorm/admin/requests/{id}/approve` - 批准申请
-- `PUT /api/multi-dorm/admin/requests/{id}/reject` - 拒绝申请
-
-#### 11. 系统管理API
+#### 3. 系统管理API
 
 - `POST /api/system/crawl` - 手动触发爬虫任务
+- `GET /api/system/qq-config` - 获取QQ机器人全局配置
 
 **请求示例：**
 
 ```bash
+# 手动触发爬虫
 curl -X POST http://localhost:8000/api/system/crawl
+
+# 获取QQ配置
+curl http://localhost:8000/api/system/qq-config
 ```
 
 ---
@@ -759,16 +683,20 @@ curl -X POST http://localhost:8000/api/system/crawl
 
 #### 1. `power_records` - 电费记录表
 
+存储从西华大学电费系统抓取的电费数据，包括余量和用电量信息。本项目针对单一宿舍监控，宿舍号从配置文件读取。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | INT | 主键，自增 |
-| dorm_number | VARCHAR(50) | 宿舍号 |
-| kbalance | FLOAT | 空调余量（度） |
-| zbalance | FLOAT | 照明余量（度） |
-| kpower_consumption | FLOAT | 空调用电量（度），与上次记录的差值 |
-| zpower_consumption | FLOAT | 照明用电量（度），与上次记录的差值 |
-| record_time | DATETIME | 记录时间 |
-| created_at | DATETIME | 创建时间 |
+| id | INT | 主键ID，自增 |
+| dorm_number | VARCHAR(50) | 宿舍号（如：320、324），用于标识不同的宿舍 |
+| balance | FLOAT | 电费余量（度），主要监控项，通常是空调余量，用于判断是否需要告警 |
+| kbalance | FLOAT | 空调余量（度），从API获取的空调专用电费余量 |
+| zbalance | FLOAT | 照明余量（度），从API获取的照明专用电费余量 |
+| kpower_consumption | FLOAT | 空调用电量（度），与上次记录的差值，表示本次记录周期内的空调用电量 |
+| zpower_consumption | FLOAT | 照明用电量（度），与上次记录的差值，表示本次记录周期内的照明用电量 |
+| power_consumption | FLOAT | 用电量（度），已废弃，保留用于兼容性，请使用kpower_consumption和zpower_consumption |
+| record_time | DATETIME | 记录时间，数据抓取的时间点 |
+| created_at | DATETIME | 创建时间，记录插入数据库的时间 |
 
 **索引建议：**
 
@@ -779,19 +707,24 @@ CREATE INDEX idx_record_time ON power_records(record_time);
 
 #### 2. `alert_rules` - 告警规则表
 
+存储单一宿舍的告警配置，包括阈值设置和告警方式（邮件/QQ）。本项目仅支持单一宿舍监控，最多存在一条规则，宿舍号从配置文件读取。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | INT | 主键，自增 |
-| dorm_number | VARCHAR(50) | 宿舍号（唯一） |
-| kthreshold | FLOAT | 空调告警阈值（度） |
-| zthreshold | FLOAT | 照明告警阈值（度） |
-| enabled | BOOLEAN | 是否启用告警 |
-| email_enabled | BOOLEAN | 是否启用邮件告警 |
-| email_address | VARCHAR(255) | 接收邮箱地址（多个用逗号分隔） |
-| qq_enabled | BOOLEAN | 是否启用QQ告警 |
-| last_alert_time | DATETIME | 最后告警时间 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
+| id | INT | 主键ID，自增 |
+| dorm_number | VARCHAR(50) | 宿舍号（如：320、324），从配置文件读取，唯一标识监控的宿舍 |
+| room_id | VARCHAR(50) | 房间ID（roomid），从西华大学电费系统API获取，用于查询该宿舍的电费数据 |
+| kthreshold | FLOAT | 空调告警阈值（度），当空调余量低于此值时触发告警 |
+| zthreshold | FLOAT | 照明告警阈值（度），当照明余量低于此值时触发告警 |
+| threshold | FLOAT | 告警阈值（度），已废弃，保留用于兼容性，请使用kthreshold和zthreshold |
+| enabled | BOOLEAN | 是否启用告警规则，False时不会触发任何告警 |
+| email_enabled | BOOLEAN | 是否启用邮件告警，True时当余量低于阈值会发送邮件 |
+| email_address | VARCHAR(255) | 邮件告警接收邮箱地址，启用邮件告警时必须填写 |
+| qq_enabled | BOOLEAN | 是否启用QQ告警，True时当余量低于阈值会发送QQ消息 |
+| qq_receiver_id | VARCHAR(50) | QQ告警接收者ID，可以是QQ号（私聊）或群号（群聊，通常>=1000000000），启用QQ告警时必须填写 |
+| last_alert_time | DATETIME | 最后告警时间，用于防止频繁告警，记录最近一次成功发送告警的时间 |
+| created_at | DATETIME | 创建时间，规则创建的时间 |
+| updated_at | DATETIME | 更新时间，规则最后修改的时间 |
 
 **唯一约束：**
 
@@ -799,104 +732,21 @@ CREATE INDEX idx_record_time ON power_records(record_time);
 ALTER TABLE alert_rules ADD UNIQUE KEY uk_dorm_number (dorm_number);
 ```
 
-**注意**：`alert_rules` 表已更新，添加了 `user_id` 和 `dorm_submission_id` 字段，用于关联用户和提交记录。
-
 #### 3. `alert_logs` - 告警日志表
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INT | 主键，自增 |
-| dorm_number | VARCHAR(50) | 宿舍号 |
-| alert_category | VARCHAR(20) | 告警类别（ac=空调，light=照明） |
-| balance | FLOAT | 触发告警时的余量（度） |
-| threshold | FLOAT | 告警阈值（度） |
-| alert_type | VARCHAR(20) | 告警类型（email=邮件，qq=QQ机器人） |
-| alert_status | VARCHAR(20) | 告警状态（success=成功，failed=失败） |
-| alert_message | TEXT | 告警消息 |
-| created_at | DATETIME | 创建时间 |
-
-#### 4. `users` - 用户表
+记录所有告警发送的历史记录，包括成功和失败的告警，用于审计和问题排查。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | INT | 主键，自增 |
-| email | VARCHAR(255) | 邮箱（唯一） |
-| password_hash | VARCHAR(255) | 密码哈希 |
-| email_verified | BOOLEAN | 邮箱是否已验证 |
-| email_verification_code | VARCHAR(50) | 邮箱验证码 |
-| email_verified_at | DATETIME | 邮箱验证时间 |
-| status | VARCHAR(20) | 状态：pending/active/banned |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-#### 5. `admins` - 管理员表
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INT | 主键，自增 |
-| username | VARCHAR(50) | 管理员账号（唯一） |
-| password_hash | VARCHAR(255) | 密码哈希 |
-| email | VARCHAR(255) | 邮箱（可选） |
-| nickname | VARCHAR(100) | 昵称 |
-| role | VARCHAR(20) | 角色：admin/super_admin |
-| status | VARCHAR(20) | 状态：active/banned |
-| created_at | DATETIME | 创建时间 |
-| last_login_at | DATETIME | 最后登录时间 |
-
-#### 6. `dorm_submissions` - 宿舍提交表
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INT | 主键，自增 |
-| user_id | INT | 用户ID（外键） |
-| dorm_number | VARCHAR(50) | 宿舍号 |
-| room_id | INT | 房间ID |
-| kbalance | FLOAT | 提交时的空调余量（用于确认） |
-| zbalance | FLOAT | 提交时的照明余量（用于确认） |
-| status | VARCHAR(20) | 状态：pending_confirmation/confirmed/active/rejected |
-| confirmed_at | DATETIME | 确认时间 |
-| alert_rule_id | INT | 关联的告警规则ID |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-#### 7. `submission_limits` - 提交限制表
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INT | 主键，自增 |
-| email | VARCHAR(255) | 邮箱 |
-| submission_date | DATE | 提交日期 |
-| submission_count | INT | 提交次数 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-#### 8. `multi_dorm_requests` - 多宿舍申请表
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INT | 主键，自增 |
-| user_id | INT | 用户ID（外键） |
-| dorm_number | VARCHAR(50) | 宿舍号 |
-| room_id | INT | 房间ID |
-| reason | TEXT | 申请理由 |
-| status | VARCHAR(20) | 状态：pending/approved/rejected |
-| admin_id | INT | 处理的管理员ID |
-| processed_at | DATETIME | 处理时间 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
-
-#### 9. `login_attempts` - 登录尝试记录表
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INT | 主键，自增 |
-| identifier | VARCHAR(255) | 标识符（邮箱或用户名） |
-| attempt_type | VARCHAR(20) | 尝试类型：user/admin |
-| failed_count | INT | 失败次数 |
-| last_attempt_at | DATETIME | 最后尝试时间 |
-| locked_until | DATETIME | 锁定到期时间 |
-| created_at | DATETIME | 创建时间 |
-| updated_at | DATETIME | 更新时间 |
+| id | INT | 主键ID，自增 |
+| dorm_number | VARCHAR(50) | 宿舍号（如：320、324），标识触发告警的宿舍 |
+| alert_category | VARCHAR(20) | 告警类别：ac（空调）/light（照明），标识是哪个类型的电费余量触发了告警 |
+| balance | FLOAT | 触发告警时的余量（度），记录告警触发时的实际电费余量 |
+| threshold | FLOAT | 告警阈值（度），记录触发告警时使用的阈值 |
+| alert_type | VARCHAR(20) | 告警类型：email（邮件告警）/qq（QQ告警），标识使用的告警方式 |
+| alert_status | VARCHAR(20) | 告警状态：success（发送成功）/failed（发送失败），标识告警是否成功发送 |
+| alert_message | TEXT | 告警消息内容，记录实际发送的告警消息文本 |
+| created_at | DATETIME | 创建时间，告警发送的时间 |
 
 ---
 
@@ -1225,29 +1075,10 @@ tail -f backend/logs/app.log
 ### Q12: 如何测试后端功能？
 
 **A**: 
-1. 执行数据库迁移：`python migrate_add_user_system.py`
-2. 创建管理员账号：`python create_admin.py --username admin --password admin123`
-3. 启动服务：`python run.py`
-4. 访问API文档：http://localhost:8000/docs
-5. 使用Swagger UI测试各个接口
-
-### Q13: 学生提交宿舍信息时如何防止误填？
-
-**A**: 
-1. 学生提交后，系统立即抓取电费数据
-2. 显示当前电费余额（空调余量、照明余量）
-3. 学生需要确认"这是我宿舍的电费"
-4. 确认后才激活监控
-5. 如果填错了，看到的数据不对，就不会确认
-
-### Q14: 如何申请监控多个宿舍？
-
-**A**: 
-1. 学生提交多宿舍申请（填写宿舍号和申请理由）
-2. 管理员审批申请（批准/拒绝）
-3. 如果批准，系统创建待确认的提交记录
-4. 学生需要确认提交（显示电费数据）
-5. 确认后激活监控
+1. 执行数据库迁移（如需要）：`python migrations/add_qq_receiver_id.py` 和 `python migrations/add_room_id.py`
+2. 启动服务：`python run.py`
+3. 访问API文档：http://localhost:8000/docs
+4. 使用Swagger UI测试各个接口
 
 ---
 
@@ -1283,5 +1114,4 @@ MIT License
 **开发说明**：本项目为开源项目，欢迎提交Issue和Pull Request。  
 **注意**：本项目仅用于学习和个人使用，请遵守西华大学相关规定，不得用于商业用途。
 
-**技术知识点文档**：详细的技术栈和使用方法请参考 `技术知识点文档.md`  
-**开发日志**：开发历史和版本记录请参考 `开发日志.md`
+**文档维护原则**：项目只保留核心文档（README.md、技术栈文档.md、CHANGELOG.md），不再生成多余的文档和测试内容，只根据最新代码更新现有文档。

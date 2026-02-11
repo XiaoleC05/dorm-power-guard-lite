@@ -362,10 +362,7 @@ CRAWLER_JSESSIONID=your_jsessionid
 
 ### 3. 定时任务配置
 
-```env
-# 每天执行时间点（小时，用逗号分隔）
-SCHEDULER_HOURS=8,12,18,22
-```
+定时任务已固定为**每小时执行一次**，无需在 `.env` 中配置 `SCHEDULER_HOURS`。
 
 ### 4. 邮件告警配置
 
@@ -584,13 +581,7 @@ mitmproxy -p 8888
 
 ### 5. 定时任务
 
-系统默认在以下时间点自动获取电费数据：
-- 08:00
-- 12:00
-- 18:00
-- 22:00
-
-可在 `.env` 文件中修改 `SCHEDULER_HOURS` 配置。
+系统**每小时自动执行一次**爬虫，获取电费数据并检查告警阈值。无需在 `.env` 中配置执行时间。
 
 ### 6. 告警功能
 
@@ -752,110 +743,168 @@ ALTER TABLE alert_rules ADD UNIQUE KEY uk_dorm_number (dorm_number);
 
 ## 部署指南
 
-### Windows系统部署
+### Windows 本地运行
 
-#### 方式一：使用批处理文件（推荐）
+使用项目根目录的一键启动脚本（推荐）：
+
+```bash
+.\start-all-complete.bat
+```
+
+或分别启动：
+
+```bash
+# 后端（新开终端）
+cd backend
+python run.py
+
+# 前端（新开终端）
+cd frontend
+npm run dev
+
+# NoneBot（可选，新开终端）
+cd backend\nonebot_bot
+python bot.py
+```
+
+### Linux/Mac 本地运行
 
 ```bash
 # 后端
-cd backend
-scripts\start\start.bat
+cd backend && python3 run.py
 
 # 前端（新终端）
-cd frontend
-npm run dev
+cd frontend && npm run dev
+
+# NoneBot（可选）
+cd backend/nonebot_bot && python3 bot.py
 ```
 
-#### 方式二：注册为Windows服务（24小时运行）
+---
 
-```powershell
-# 以管理员身份运行PowerShell
-cd backend
-.\scripts\install\install_windows_service.ps1
-```
+### 云服务器部署（24 小时运行）
 
-### Linux/Mac系统部署
+要让程序在电脑关闭后仍能运行，需要部署到一台**长期在线的服务器**（如云服务器）。
 
-```bash
-# 后端
-cd backend
-python3 run.py
-
-# 前端（新终端）
-cd frontend
-npm run dev
-```
-
-### 云服务器部署（24小时运行）
-
-#### 为什么需要云服务器？
-
-要让程序在个人电脑关闭后也能一直运行，需要将程序部署到一台**24小时运行的服务器**上。
-
-#### 推荐方案：云服务器部署
-
-**优点**：
-- ✅ 成本低：每月约 ¥20-50（如阿里云/腾讯云轻量应用服务器）
-- ✅ 稳定可靠：24小时运行，有专业维护
-- ✅ 易于访问：有公网IP，可随时随地访问
-- ✅ 易于扩展：可根据需要升级配置
-
-#### 快速开始
+#### 一、准备云服务器
 
 1. **购买云服务器**
-   - 推荐：阿里云/腾讯云轻量应用服务器
-   - 配置：1核2GB内存，40GB SSD
-   - 系统：Ubuntu 22.04 LTS
-   - 价格：约 ¥24/月
+   - 推荐：阿里云 / 腾讯云 轻量应用服务器
+   - 配置：1 核 2GB 内存、40GB SSD 即可
+   - 系统：**Ubuntu 22.04 LTS**
+   - 价格：约 ¥24/月 起
 
-2. **连接到服务器**
+2. **登录服务器**
 
 ```bash
-ssh root@your_server_ip
+ssh root@你的服务器IP
 ```
 
-3. **安装依赖**
+#### 二、安装环境
 
 ```bash
 apt update
-apt install -y python3 python3-pip git mysql-server nginx
+apt install -y python3 python3-pip python3-venv git mysql-server nginx nodejs npm
 ```
 
-4. **部署程序**
+- 若 `nodejs` 版本过旧，可用 [NodeSource](https://github.com/nodesource/distributions) 安装 Node 18+。
+
+#### 三、克隆项目并安装依赖
 
 ```bash
 cd /opt
 git clone https://gitee.com/ak-god/dorm-power-guard-lite.git
-cd dorm-power-guard-lite/backend
-pip3 install -r requirements.txt
+cd dorm-power-guard-lite
 ```
 
-5. **配置环境变量**
+**后端：**
 
 ```bash
-cp .env.example .env
-nano .env  # 编辑配置文件
+cd /opt/dorm-power-guard-lite/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-6. **创建systemd服务**
+**前端（构建静态文件）：**
+
+```bash
+cd /opt/dorm-power-guard-lite/frontend
+npm install
+npm run build
+```
+
+生成的前端文件在 `frontend/dist/`，供 Nginx 使用。
+
+#### 四、MySQL 数据库
+
+1. **启动并配置 MySQL**
+
+```bash
+sudo systemctl start mysql
+sudo mysql_secure_installation  # 按提示设置 root 密码
+```
+
+2. **创建数据库和用户**
+
+```bash
+sudo mysql -u root -p
+```
+
+在 MySQL 中执行：
+
+```sql
+CREATE DATABASE dorm_power_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'dorm_guard'@'localhost' IDENTIFIED BY '你的密码';
+GRANT ALL ON dorm_power_guard.* TO 'dorm_guard'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+3. **初始化表结构**
+
+```bash
+mysql -u dorm_guard -p dorm_power_guard < /opt/dorm-power-guard-lite/backend/scripts/db/init_db.sql
+```
+
+#### 五、配置后端环境变量
+
+```bash
+cd /opt/dorm-power-guard-lite/backend
+cp .env.example .env
+nano .env
+```
+
+必填项示例：
+
+- `DB_HOST=localhost`、`DB_PORT=3306`、`DB_USER=dorm_guard`、`DB_PASSWORD=你的密码`、`DB_NAME=dorm_power_guard`
+- `CRAWLER_OPENID`、`CRAWLER_JSESSIONID`（抓包获取）
+- `CRAWLER_DORM_NUMBER`、`CRAWLER_ROOM_ID`（或通过告警规则中的 room_id 配置）
+- 邮件/QQ 告警按需配置（见上文「详细配置」）
+
+云服务器上通常**不部署 NoneBot/NapCatQQ**（需图形界面登录 QQ），可关闭 QQ 告警或仅在本地运行 QQ 机器人。
+
+#### 六、用 systemd 管理后端
+
+创建服务文件：
 
 ```bash
 sudo nano /etc/systemd/system/dorm-power-guard.service
 ```
 
-内容：
+内容（路径按实际修改）：
 
 ```ini
 [Unit]
-Description=Dorm Power Guard Backend Service
+Description=Dorm Power Guard Backend
 After=network.target mysql.service
 
 [Service]
 Type=simple
 User=www-data
 WorkingDirectory=/opt/dorm-power-guard-lite/backend
-Environment="PATH=/usr/bin:/usr/local/bin"
-ExecStart=/usr/bin/python3 /opt/dorm-power-guard-lite/backend/run.py
+Environment="PATH=/opt/dorm-power-guard-lite/backend/venv/bin:/usr/bin:/usr/local/bin"
+ExecStart=/opt/dorm-power-guard-lite/backend/venv/bin/python run.py
 Restart=always
 RestartSec=10
 
@@ -863,7 +912,9 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-7. **启动服务**
+若未使用 venv，则 `ExecStart` 改为：`/usr/bin/python3 /opt/dorm-power-guard-lite/backend/run.py`。
+
+启动并开机自启：
 
 ```bash
 sudo systemctl daemon-reload
@@ -872,56 +923,186 @@ sudo systemctl start dorm-power-guard
 sudo systemctl status dorm-power-guard
 ```
 
-8. **配置Nginx反向代理**
+#### 七、Nginx 反向代理
+
+创建站点配置：
 
 ```bash
 sudo nano /etc/nginx/sites-available/dorm-power-guard
 ```
 
-内容：
+内容（将 `your_domain.com` 改为你的域名或服务器 IP）：
 
 ```nginx
 server {
     listen 80;
-    server_name your_domain.com;
+    server_name your_domain.com;   # 或服务器公网IP
 
+    # 前端静态文件
     location / {
         root /opt/dorm-power-guard-lite/frontend/dist;
         try_files $uri $uri/ /index.html;
     }
 
+    # 后端 API
     location /api {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
+启用站点并重启 Nginx：
+
 ```bash
-sudo ln -s /etc/nginx/sites-available/dorm-power-guard /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/dorm-power-guard /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-#### 配置SSL证书（可选）
+#### 八、HTTPS（可选）
 
-使用Let's Encrypt免费SSL证书：
+使用 Let's Encrypt（需已解析域名的域名）：
 
 ```bash
-sudo apt install certbot python3-certbot-nginx
+sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d your_domain.com
 ```
 
-#### 配置防火墙
+#### 九、防火墙
 
 ```bash
-# Ubuntu/Debian (ufw)
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
+
+#### 十、验证
+
+- 浏览器访问：`http://你的域名或IP`
+- 应能看到前端页面，且监控/电费数据能正常加载（需先配置好抓包得到的 openid 等并在前端配置告警规则中的 room_id）。
+
+---
+
+#### （可选）云上同时部署 NoneBot + NapCatQQ
+
+若希望 QQ 告警也在云服务器上运行，可在同一台机器上部署 **NoneBot** 和 **NapCatQQ**（NapCatQQ 推荐用 Docker，便于 WebUI 扫码登录）。
+
+**1. 安装 NoneBot 依赖并配置**
+
+```bash
+cd /opt/dorm-power-guard-lite/backend/nonebot_bot
+python3 -m venv venv
+source venv/bin/activate
+pip install nonebot2 nonebot-adapter-onebot httpx
+```
+
+确认 `backend/nonebot_bot/.env` 中：
+
+- `HOST=0.0.0.0`、`PORT=8080`（供本机 NapCat 连接）
+
+**2. 用 systemd 管理 NoneBot**
+
+```bash
+sudo nano /etc/systemd/system/dorm-nonebot.service
+```
+
+内容示例：
+
+```ini
+[Unit]
+Description=Dorm Power Guard NoneBot QQ
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/dorm-power-guard-lite/backend/nonebot_bot
+Environment="PATH=/opt/dorm-power-guard-lite/backend/nonebot_bot/venv/bin:/usr/bin"
+ExecStart=/opt/dorm-power-guard-lite/backend/nonebot_bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable dorm-nonebot
+sudo systemctl start dorm-nonebot
+sudo systemctl status dorm-nonebot
+```
+
+**3. 用 Docker 部署 NapCatQQ（推荐）**
+
+NapCatQQ 需扫码登录，Docker 版提供 WebUI（端口 6099）用于扫码。
+
+- 安装 Docker（若未装）：`apt install -y docker.io docker-compose`
+- 创建数据目录并运行容器（按需替换镜像名，以官方/社区文档为准）：
+
+```bash
+sudo mkdir -p /opt/napcat/data
+sudo docker run -d \
+  --name napcat \
+  --restart unless-stopped \
+  -p 6099:6099 \
+  -v /opt/napcat/data:/app/napcat/data \
+  -e WEBUI_TOKEN=你的WebUI访问令牌 \
+  mlikiowa/napcat-docker:latest
+```
+
+- 首次登录：浏览器访问 `http://你的服务器IP:6099`（或 `https://你的域名` 若用 Nginx 反代 6099），在 WebUI 中扫码登录 QQ。
+- 配置连接 NoneBot：在 NapCat 的 WebUI 或挂载的配置里，添加**反向 WebSocket** 客户端，地址为 `ws://宿主机IP:8080/onebot/v11/ws`（若 NapCat 与 NoneBot 同机，填 `ws://127.0.0.1:8080/onebot/v11/ws`）。保存后 NapCat 会连上 NoneBot。
+
+**4. 后端配置**
+
+在 `backend/.env` 中开启 QQ 告警并指向本机 NoneBot：
+
+```env
+QQ_BOT_ENABLED=true
+QQ_BOT_API_URL=http://127.0.0.1:8080
+```
+
+告警规则中的接收 QQ/群号仍在前端「告警规则」里配置（qq_receiver_id）。
+
+**5. 防火墙（仅需时开放）**
+
+若通过公网访问 WebUI 扫码，临时开放 6099：
+
+```bash
+sudo ufw allow 6099/tcp
+sudo ufw reload
+```
+
+更安全的做法是：不开放 6099，在本地用 SSH 隧道访问 WebUI：
+
+```bash
+ssh -L 6099:127.0.0.1:6099 root@你的服务器IP
+```
+
+然后在本地浏览器打开 `http://localhost:6099` 进行扫码和配置。
+
+**6. 扫码提示「网络不稳定」时**
+
+部分云机房 IP 会被 QQ 限制，可尝试：
+
+- 用 SSH 隧道在本地浏览器打开 WebUI 再扫码（出口 IP 为服务器，有时可过）；
+- 或在本机/家里电脑先跑一遍 NapCatQQ，登录成功后把 NapCat 的登录凭证（如 device、session 等）拷贝到服务器 NapCat 数据目录再启动（具体文件名见 NapCat 文档）。
+
+**7. 更新代码后重启**
+
+```bash
+sudo systemctl restart dorm-power-guard
+sudo systemctl restart dorm-nonebot
+sudo docker restart napcat
+```
+
+按以上步骤即可在云服务器上同时跑 **后端 + 前端 + NoneBot + NapCatQQ**，实现 24 小时电费监控与 QQ 告警。
 
 ---
 
@@ -1016,10 +1197,7 @@ chmod +x backend/update.sh
 
 ### Q4: 如何修改抓取频率？
 
-**A**: 编辑 `backend/.env` 文件中的 `SCHEDULER_HOURS`，例如：
-```env
-SCHEDULER_HOURS=8,12,18,22  # 每天8点、12点、18点、22点
-```
+**A**: 当前版本固定为**每小时执行一次**。若需修改，请直接改 `backend/app/scheduler.py` 中 `IntervalTrigger(hours=1)` 的参数并重启后端。
 
 ### Q5: 如何部署到云服务器？
 

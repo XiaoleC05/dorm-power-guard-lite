@@ -36,7 +36,7 @@ jobs:
       - name: 创建 .env
         run: |
           cd backend
-          cat > .env << 'ENVEOF'
+          cat > .env << ENVEOF
           DB_HOST=127.0.0.1
           DB_PORT=3306
           DB_USER=root
@@ -47,17 +47,18 @@ jobs:
           CRAWLER_OPENID=${{ secrets.CRAWLER_OPENID }}
           CRAWLER_DORM_NUMBER=${{ secrets.CRAWLER_DORM_NUMBER }}
           CRAWLER_ROOM_ID=${{ secrets.CRAWLER_ROOM_ID }}
-          CRAWLER_AREA_ID=${{ secrets.CRAWLER_AREA_ID }}
-          CRAWLER_YQ_ID=${{ secrets.CRAWLER_YQ_ID }}
-          CRAWLER_BUILDING_ID=${{ secrets.CRAWLER_BUILDING_ID }}
-          CRAWLER_FLOOR_ID=${{ secrets.CRAWLER_FLOOR_ID }}
-          CRAWLER_FACTORY_CODE=${{ secrets.CRAWLER_FACTORY_CODE }}
-          CRAWLER_SIGN=${{ secrets.CRAWLER_SIGN }}
-          CRAWLER_ORG_ID=${{ secrets.CRAWLER_ORG_ID }}
+          CRAWLER_AREA_ID=${{ vars.CRAWLER_AREA_ID }}
+          CRAWLER_YQ_ID=${{ vars.CRAWLER_YQ_ID }}
+          CRAWLER_BUILDING_ID=${{ vars.CRAWLER_BUILDING_ID }}
+          CRAWLER_FLOOR_ID=${{ vars.CRAWLER_FLOOR_ID }}
+          CRAWLER_FACTORY_CODE=${{ vars.CRAWLER_FACTORY_CODE }}
+          CRAWLER_SIGN=${{ vars.CRAWLER_SIGN }}
+          CRAWLER_ORG_ID=${{ vars.CRAWLER_ORG_ID }}
           QQ_NOTIFY_API_KEY=${{ secrets.QQ_NOTIFY_API_KEY }}
           DEFAULT_ALERT_THRESHOLD=${{ secrets.DEFAULT_ALERT_THRESHOLD }}
           ENVEOF
-      - run: |
+      - name: 等待 MySQL 就绪
+        run: |
           for i in {1..30}; do
             if mysqladmin ping -h 127.0.0.1 -u root -p"${{ secrets.DB_PASSWORD }}" --silent 2>/dev/null; then
               echo "MySQL ready"
@@ -65,6 +66,8 @@ jobs:
             fi
             sleep 2
           done
-      - run: |
+      - name: 执行电费检测
+        run: |
           cd backend
+          export $(grep -v '^#' .env | xargs)
           python run_ci.py

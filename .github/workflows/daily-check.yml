@@ -2,15 +2,12 @@ name: 宿舍电费每日检测
 
 on:
   schedule:
-    # 每天北京时间 08:00 运行（UTC 00:00）
     - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
   check-power:
-    name: 电费检测
     runs-on: ubuntu-latest
-
     services:
       mysql:
         image: mysql:5.7
@@ -24,83 +21,50 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 设置 Python 环境
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
-      - name: 安装系统依赖
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libxml2-dev libxslt-dev mysql-client
-
-      - name: 安装 Python 依赖
-        run: |
+      - run: |
           cd backend
           pip install --upgrade pip
           pip install --no-cache-dir -r requirements.txt
-
-      - name: 通过 Python 创建 .env 配置文件
+      - name: 创建 .env
         run: |
           cd backend
-          python -c "
-          import os
-          env_content = '''# ===== 数据库配置 =====
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-DB_NAME=dorm_power_guard
-
-# ===== 爬虫认证信息 =====
-CRAWLER_BASE_URL=${{ secrets.CRAWLER_BASE_URL }}
-CRAWLER_API_BASE_URL=${{ secrets.CRAWLER_API_BASE_URL }}
-CRAWLER_OPENID=${{ secrets.CRAWLER_OPENID }}
-CRAWLER_DORM_NUMBER=${{ secrets.CRAWLER_DORM_NUMBER }}
-CRAWLER_ROOM_ID=${{ secrets.CRAWLER_ROOM_ID }}
-CRAWLER_AREA_ID=${{ secrets.CRAWLER_AREA_ID }}
-CRAWLER_YQ_ID=${{ secrets.CRAWLER_YQ_ID }}
-CRAWLER_BUILDING_ID=${{ secrets.CRAWLER_BUILDING_ID }}
-CRAWLER_FLOOR_ID=${{ secrets.CRAWLER_FLOOR_ID }}
-CRAWLER_FACTORY_CODE=${{ secrets.CRAWLER_FACTORY_CODE }}
-CRAWLER_SIGN=${{ secrets.CRAWLER_SIGN }}
-CRAWLER_ORG_ID=${{ secrets.CRAWLER_ORG_ID }}
-
-# ===== 邮件告警配置 =====
-EMAIL_ENABLED=${{ secrets.EMAIL_ENABLED }}
-EMAIL_SMTP_HOST=${{ secrets.EMAIL_SMTP_HOST }}
-EMAIL_SMTP_PORT=${{ secrets.EMAIL_SMTP_PORT }}
-EMAIL_SMTP_USER=${{ secrets.EMAIL_SMTP_USER }}
-EMAIL_SMTP_PASSWORD=${{ secrets.EMAIL_SMTP_PASSWORD }}
-EMAIL_FROM=${{ secrets.EMAIL_FROM }}
-EMAIL_TO=${{ secrets.EMAIL_TO }}
-QQ_NOTIFY_API_KEY=${{ secrets.QQ_NOTIFY_API_KEY }}
-
-# ===== 默认告警阈值 =====
-DEFAULT_ALERT_THRESHOLD=${{ secrets.DEFAULT_ALERT_THRESHOLD }}
-'''
-          with open('.env', 'w', encoding='utf-8') as f:
-              f.write(env_content.strip())
-          print('.env 文件已创建')
-          "
-
-      - name: 等待 MySQL 就绪
-        run: |
+          cat > .env << 'ENVEOF'
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_USER=root
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_NAME=dorm_power_guard
+          CRAWLER_BASE_URL=${{ secrets.CRAWLER_BASE_URL }}
+          CRAWLER_API_BASE_URL=${{ secrets.CRAWLER_API_BASE_URL }}
+          CRAWLER_OPENID=${{ secrets.CRAWLER_OPENID }}
+          CRAWLER_DORM_NUMBER=${{ secrets.CRAWLER_DORM_NUMBER }}
+          CRAWLER_ROOM_ID=${{ secrets.CRAWLER_ROOM_ID }}
+          CRAWLER_AREA_ID=${{ secrets.CRAWLER_AREA_ID }}
+          CRAWLER_YQ_ID=${{ secrets.CRAWLER_YQ_ID }}
+          CRAWLER_BUILDING_ID=${{ secrets.CRAWLER_BUILDING_ID }}
+          CRAWLER_FLOOR_ID=${{ secrets.CRAWLER_FLOOR_ID }}
+          CRAWLER_FACTORY_CODE=${{ secrets.CRAWLER_FACTORY_CODE }}
+          CRAWLER_SIGN=${{ secrets.CRAWLER_SIGN }}
+          CRAWLER_ORG_ID=${{ secrets.CRAWLER_ORG_ID }}
+          QQ_NOTIFY_API_KEY=${{ secrets.QQ_NOTIFY_API_KEY }}
+          DEFAULT_ALERT_THRESHOLD=${{ secrets.DEFAULT_ALERT_THRESHOLD }}
+          ENVEOF
+      - run: |
           for i in {1..30}; do
             if mysqladmin ping -h 127.0.0.1 -u root -p"${{ secrets.DB_PASSWORD }}" --silent 2>/dev/null; then
-              echo "MySQL 已就绪"
+              echo "MySQL ready"
               break
             fi
-            echo "等待 MySQL 启动... ($i/30)"
             sleep 2
           done
-
-      - name: 执行电费检测
-        run: |
+      - run: |
           cd backend
           python run_ci.py

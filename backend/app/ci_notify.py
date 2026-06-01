@@ -7,8 +7,9 @@ CI 环境下的通知模块
 
 通过环境变量控制启用哪些渠道：
 - QQ_NOTIFY_API_KEY: (必填) PushPlus Token（微信推送）
-- QQ_MSG_API_KEY: (可选) QMsg API Key，配置后启用 QQ 群推送
-- QQ_GROUP_ID: (可选) QMsg 群号，配合 QQ_MSG_API_KEY 使用
+- QQ_MSG_API_KEY: (可选) QMsg API Key，配置后启用 QQ 推送
+- QQ_GROUP_ID: (可选) QQ 群号，设置后发送到群聊
+- QQ_TARGET_QQ: (可选) QQ 号，设置后发送到个人 QQ（优先级低于群号）
 """
 import logging
 import os
@@ -53,7 +54,7 @@ class PushPlusNotifier:
 
 
 class QQDirectNotifier:
-    """QMsg QQ 群消息推送"""
+    """QMsg QQ 消息推送（支持个人 QQ 和群聊）"""
 
     API_BASE = "https://qmsg.zendee.cn"
 
@@ -61,6 +62,7 @@ class QQDirectNotifier:
         self.api_key = os.getenv("QQ_MSG_API_KEY", "")
         self.enabled = bool(self.api_key)
         self.group_id = os.getenv("QQ_GROUP_ID", "")
+        self.target_qq = os.getenv("QQ_TARGET_QQ", "")
 
     def send(self, title: str, content: str) -> bool:
         if not self.enabled:
@@ -74,6 +76,9 @@ class QQDirectNotifier:
             if self.group_id:
                 data["qq"] = f"group:{self.group_id}"
                 logger.info(f"正在通过 QMsg 发送消息到群 {self.group_id}...")
+            elif self.target_qq:
+                data["qq"] = self.target_qq
+                logger.info(f"正在通过 QMsg 发送消息到 QQ {self.target_qq}...")
             else:
                 logger.info("正在通过 QMsg 发送消息...")
 
@@ -100,7 +105,8 @@ class Notifier:
 
     同时发送到所有已启用的渠道：
     - QQ_NOTIFY_API_KEY 配置了 → PushPlus（微信）
-    - QQ_NOTIFY_API_KEY + QQ_GROUP_ID 都配置了 → QMsg（QQ 群）
+    - QQ_MSG_API_KEY + QQ_GROUP_ID 都配置了 → QMsg（QQ 群）
+    - QQ_MSG_API_KEY + QQ_TARGET_QQ 都配置了 → QMsg（个人 QQ）
     """
 
     def __init__(self):
@@ -111,7 +117,7 @@ class Notifier:
         results = []
         if self.pushplus.enabled:
             results.append(self.pushplus.send(title, content))
-        if self.qmsg.enabled and self.qmsg.group_id:
+        if self.qmsg.enabled and (self.qmsg.group_id or self.qmsg.target_qq):
             results.append(self.qmsg.send(title, content))
         if not results:
             logger.info("未启用任何通知渠道")

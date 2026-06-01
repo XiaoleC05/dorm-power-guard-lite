@@ -68,9 +68,9 @@ def main():
 
     from app.database import init_db, SessionLocal
     from app.services import CrawlerService, PowerRecordService
-    from app.ci_notify import QQDirectNotifier
+    from app.ci_notify import Notifier
 
-    notifier = QQDirectNotifier()
+    notifier = Notifier()
     dorm_number = get_dorm_number()
     threshold = get_alert_threshold()
 

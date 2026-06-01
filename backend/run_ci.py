@@ -20,16 +20,45 @@ logger = logging.getLogger(__name__)
 
 
 def get_dorm_number() -> str:
-    """从环境变量获取宿舍号"""
     return os.getenv("CRAWLER_DORM_NUMBER", "未知")
 
 
 def get_alert_threshold() -> float:
-    """获取告警阈值，默认 10 度"""
     try:
         return float(os.getenv("DEFAULT_ALERT_THRESHOLD", "10"))
     except ValueError:
         return 10.0
+
+
+def ensure_alert_rule(db, dorm_number, threshold):
+    """确保存在启用的告警规则，否则创建默认规则"""
+    from app.models import AlertRule
+    rule = db.query(AlertRule).filter(
+        AlertRule.enabled == True,
+        AlertRule.room_id.isnot(None)
+    ).first()
+    if rule:
+        logger.info(f"已存在启用的告警规则：{rule.dorm_number}")
+        return rule
+
+    from app.schemas import AlertRuleCreate
+    from app.services import AlertRuleService
+    room_id = os.getenv("CRAWLER_ROOM_ID", "")
+    if not room_id:
+        logger.warning("环境变量 CRAWLER_ROOM_ID 未设置，无法创建告警规则")
+        return None
+
+    logger.info("未找到启用的告警规则，正在创建默认规则...")
+    default_rule = AlertRuleCreate(
+        dorm_number=dorm_number,
+        room_id=room_id,
+        kthreshold=threshold,
+        zthreshold=threshold,
+        enabled=True,
+    )
+    rule = AlertRuleService.create_rule(db, default_rule)
+    logger.info(f"已创建默认告警规则：{dorm_number}, room_id={room_id}, 阈值={threshold}")
+    return rule
 
 
 def main():
@@ -57,6 +86,7 @@ def main():
     logger.info("正在执行电费数据抓取...")
     db = SessionLocal()
     try:
+        ensure_alert_rule(db, dorm_number, threshold)
         success = CrawlerService.crawl_and_save(db)
 
         if success:

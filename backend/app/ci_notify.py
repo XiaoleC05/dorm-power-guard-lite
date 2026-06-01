@@ -117,7 +117,7 @@ class Notifier:
         results = []
         if self.pushplus.enabled:
             results.append(self.pushplus.send(title, content))
-        if self.qmsg.enabled and (self.qmsg.group_id or self.qmsg.target_qq):
+        if self.qmsg.enabled:
             results.append(self.qmsg.send(title, content))
         if not results:
             logger.info("未启用任何通知渠道")

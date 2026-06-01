@@ -24,6 +24,14 @@ def get_dorm_number() -> str:
     return os.getenv("CRAWLER_DORM_NUMBER", "未知")
 
 
+def get_alert_threshold() -> float:
+    """获取告警阈值，默认 10 度"""
+    try:
+        return float(os.getenv("DEFAULT_ALERT_THRESHOLD", "10"))
+    except ValueError:
+        return 10.0
+
+
 def main():
     logger.info("=" * 60)
     logger.info("宿舍电费监控系统 - GitHub Actions 定时任务")
@@ -35,6 +43,7 @@ def main():
 
     notifier = QQDirectNotifier()
     dorm_number = get_dorm_number()
+    threshold = get_alert_threshold()
 
     logger.info("正在初始化数据库...")
     try:
@@ -74,9 +83,9 @@ def main():
                     zpower=zpower,
                 )
 
-                if (kbalance is not None and kbalance < 20) or \
-                   (zbalance is not None and zbalance < 20):
-                    logger.warning("电费余额低于 20 度，发送告警通知")
+                if (kbalance is not None and kbalance < threshold) or \
+                   (zbalance is not None and zbalance < threshold):
+                    logger.warning(f"电费余额低于 {threshold} 度，发送告警通知")
                     notifier.send_alert(
                         dorm_number=dorm_number,
                         kbalance=kbalance,

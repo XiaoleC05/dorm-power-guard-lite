@@ -6,6 +6,7 @@
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -59,12 +60,23 @@ class Settings(BaseSettings):
     QQ_BOT_SENDER_ID: Optional[str] = None  # 发送方QQ号（机器人QQ号，默认：1270667498）
     QQ_BOT_ACCESS_TOKEN: Optional[str] = None  # API访问令牌（如果NoneBot配置了access_token）
     
+    # QQ直推配置（QMsg）
+    QQ_NOTIFY_API_KEY: Optional[str] = None  # QMsg API Key
+
     # 默认告警阈值
-    DEFAULT_ALERT_THRESHOLD: float = 20.0  # 默认余额低于20元时告警
-    
+    DEFAULT_ALERT_THRESHOLD: Optional[float] = 20.0  # 默认余额低于20元时告警
+
+    @field_validator("DEFAULT_ALERT_THRESHOLD", mode="before")
+    @classmethod
+    def empty_str_to_default(cls, v):
+        if v == "" or v is None:
+            return 20.0
+        return v
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 settings = Settings()

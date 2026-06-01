@@ -6,8 +6,9 @@ CI 环境下的通知模块
 2. QMsg - 发送到 QQ 群 / QQ 号
 
 通过环境变量控制启用哪些渠道：
-- QQ_NOTIFY_API_KEY: (必填) PushPlus Token
-- QQ_GROUP_ID: (可选) QMsg 群号，设置后启用 QMsg 群发
+- QQ_NOTIFY_API_KEY: (必填) PushPlus Token（微信推送）
+- QQ_MSG_API_KEY: (可选) QMsg API Key，配置后启用 QQ 群推送
+- QQ_GROUP_ID: (可选) QMsg 群号，配合 QQ_MSG_API_KEY 使用
 """
 import logging
 import os
@@ -57,7 +58,7 @@ class QQDirectNotifier:
     API_BASE = "https://qmsg.zendee.cn"
 
     def __init__(self):
-        self.api_key = os.getenv("QQ_NOTIFY_API_KEY", "")
+        self.api_key = os.getenv("QQ_MSG_API_KEY", "")
         self.enabled = bool(self.api_key)
         self.group_id = os.getenv("QQ_GROUP_ID", "")
 

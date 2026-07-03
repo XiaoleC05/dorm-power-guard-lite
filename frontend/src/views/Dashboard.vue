@@ -282,7 +282,12 @@ import { getLatestRecord, getRecords, getRecordsByRange } from '../api/power'
 import { manualCrawl } from '../api/system'
 import { getCurrentAlertRule, createAlertRule, updateCurrentAlertRule } from '../api/alert'
 import { getConfig } from '../api/system'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import { BarChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 import dayjs from 'dayjs'
 
 const loading = ref(false)

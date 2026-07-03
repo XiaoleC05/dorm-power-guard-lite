@@ -88,3 +88,6 @@ Thumbs.db
 test_*.py
 *_test.py
 debug_*.py
+
+release/
+release.tar.gz

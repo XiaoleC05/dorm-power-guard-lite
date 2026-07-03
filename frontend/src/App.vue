@@ -1,9 +1,10 @@
 <template>
+  <el-config-provider :locale="zhCn">
   <router-view v-if="isLoginPage" />
   <el-container v-else class="app-container">
     <el-header class="app-header">
       <div class="header-content">
-        <h1>宿舍电费监控</h1>
+        <h1>奥泽莉亚工具箱</h1>
         <el-menu
           mode="horizontal"
           :default-active="activeMenu"
@@ -34,11 +35,13 @@
       <router-view />
     </el-main>
   </el-container>
+  </el-config-provider>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { Monitor, Document, Bell, Setting } from '@element-plus/icons-vue'
 import { clearAuth } from './api/auth'
 

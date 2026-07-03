@@ -13,7 +13,7 @@ sleep 2
 echo "[2] 迁移代码到 ${APP_DIR}..."
 mkdir -p /opt
 if [ -d "$OLD_DIR" ]; then
-  rsync -a --delete --exclude venv --exclude node_modules "$OLD_DIR/" "$APP_DIR/"
+  rsync -a --exclude venv --exclude node_modules "$OLD_DIR/" "$APP_DIR/"
 else
   mkdir -p "$APP_DIR"
 fi

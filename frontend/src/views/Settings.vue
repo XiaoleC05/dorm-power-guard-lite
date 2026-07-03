@@ -6,7 +6,7 @@
     </div>
 
     <el-alert
-      title="保存后需重启后端服务才能完全生效（GitHub Actions 部署会自动重启）"
+      title="保存后系统将自动重启相关服务使配置生效"
       type="info"
       show-icon
       :closable="false"
@@ -124,7 +124,7 @@ const form = reactive({
   QQ_BOT_ENABLED: 'false',
   QQ_BOT_API_URL: 'http://127.0.0.1:8080',
   QQ_BOT_GROUP_ID: '',
-  QQ_BOT_USER_ID: '',
+  QQ_BOT_USER_ID: '714085964',
   QQ_BOT_ACCESS_TOKEN: ''
 })
 
@@ -152,7 +152,7 @@ const saveSettings = async () => {
       EMAIL_ENABLED: emailEnabled.value ? 'true' : 'false',
       QQ_BOT_ENABLED: qqBotEnabled.value ? 'true' : 'false'
     })
-    ElMessage.success('配置已保存，请等待后端重启后生效')
+    ElMessage.success('配置已保存，服务正在重启')
     await loadSettings()
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '保存失败')

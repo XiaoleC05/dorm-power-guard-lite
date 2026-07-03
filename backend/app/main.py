@@ -1,9 +1,7 @@
 """
-西华大学宿舍电费监控系统 - 主应用入口
-
-本项目针对西华大学一卡通宿舍用电小程序，用于监控宿舍电费使用情况。
-管理员QQ：714085964
+奥泽莉亚工具箱 - 宿舍电费监控主应用入口
 """
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,46 +17,51 @@ import traceback
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
-    # 启动时执行
-    logger.info("应用启动，开始执行初始数据抓取...")
+async def _deferred_initial_crawl():
+    """延迟后台抓取，避免阻塞服务启动。"""
+    await asyncio.sleep(3)
     db = SessionLocal()
     try:
         success = CrawlerService.crawl_and_save(db)
         if success:
-            logger.info("启动时数据抓取成功")
+            logger.info("后台初始数据抓取成功")
         else:
-            logger.warning("启动时数据抓取失败，将在定时任务中重试")
+            logger.warning("后台初始数据抓取失败，将在定时任务中重试")
     except Exception as e:
-        logger.error(f"启动时数据抓取异常：{e}")
+        logger.error(f"后台初始数据抓取异常：{e}")
     finally:
         db.close()
-    
-    # 初始化定时任务调度器
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
     init_scheduler()
-    
+    asyncio.create_task(_deferred_initial_crawl())
+    logger.info("应用已启动，定时任务就绪")
+
     yield
-    
-    # 关闭时执行
+
     shutdown_scheduler()
     logger.info("应用关闭")
 
 
 app = FastAPI(
-    title="西华大学宿舍电费监控系统",
-    description="针对西华大学一卡通宿舍用电小程序的电费监控和告警系统。管理员QQ：714085964",
+    title="奥泽莉亚工具箱",
+    description="宿舍电费监控与告警系统",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # 配置CORS，允许前端访问
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://masterc.cn",
-        "https://www.masterc.cn",
+        "https://oxelia51.com",
+        "https://www.oxelia51.com",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
@@ -92,20 +95,21 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """请求验证异常处理器"""
     logger.error(f"请求验证失败: {exc}")
+    body = exc.body
+    if isinstance(body, bytes):
+        try:
+            body = body.decode("utf-8")
+        except UnicodeDecodeError:
+            body = None
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors(), "body": exc.body}
+        content={"detail": exc.errors(), "body": body},
     )
 
 
 @app.get("/")
 async def root():
-    return {
-        "message": "西华大学宿舍电费监控系统 API",
-        "version": "1.0.0",
-        "description": "针对西华大学一卡通宿舍用电小程序的电费监控系统",
-        "admin_qq": "714085964"
-    }
+    return {"status": "ok", "service": "oxelia-toolbox"}
 
 
 @app.get("/health")

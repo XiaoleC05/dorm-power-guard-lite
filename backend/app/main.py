@@ -1,5 +1,5 @@
 """
-DormGuard - 宿舍电费监控主应用入口
+奥泽莉亚工具箱 · 宿舍电费监控（DormGuard）主应用入口
 """
 import asyncio
 from contextlib import asynccontextmanager
@@ -47,8 +47,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DormGuard",
-    description="宿舍电费监控与告警系统",
+    title="奥泽莉亚工具箱",
+    description="奥泽莉亚工具箱 · 宿舍电费监控（首个工具）",
     version="1.0.0",
     lifespan=lifespan,
     docs_url=None,

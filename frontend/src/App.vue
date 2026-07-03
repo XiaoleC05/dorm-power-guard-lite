@@ -4,7 +4,7 @@
   <el-container v-else class="app-container">
     <el-header class="app-header">
       <div class="header-content">
-        <h1>DormGuard</h1>
+        <h1>奥泽莉亚工具箱</h1>
         <el-menu
           mode="horizontal"
           :default-active="activeMenu"

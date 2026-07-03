@@ -1,5 +1,5 @@
 """
-DormGuard - 配置文件
+奥泽莉亚工具箱 · 宿舍电费监控（DormGuard）配置
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional

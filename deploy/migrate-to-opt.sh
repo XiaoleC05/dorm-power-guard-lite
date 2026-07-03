@@ -25,11 +25,14 @@ fi
 
 if ! grep -q '^ADMIN_USERNAME=' "$APP_DIR/backend/.env" 2>/dev/null; then
   cat >> "$APP_DIR/backend/.env" <<'EOF'
+APP_DEBUG=false
 ADMIN_USERNAME=root
-ADMIN_PASSWORD=783688
-ADMIN_JWT_SECRET=please-change-this-secret
+ADMIN_PASSWORD=CHANGE_ME_USE_STRONG_PASSWORD
+ADMIN_JWT_SECRET=CHANGE_ME_USE_RANDOM_JWT_SECRET_32CHARS_MIN
 ADMIN_TOKEN_EXPIRE_HOURS=168
+QQ_BOT_API_TOKEN=CHANGE_ME_USE_RANDOM_BOT_API_TOKEN
 EOF
+  echo "已追加管理登录占位配置，请编辑 $APP_DIR/backend/.env 后重启服务"
 fi
 
 echo "[4] 创建虚拟环境..."

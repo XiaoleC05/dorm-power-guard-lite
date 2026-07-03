@@ -7,6 +7,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/dorm-power-guard-lite/backend/nonebot_bot
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/dorm-power-guard-lite/backend/.env
 ExecStart=/opt/dorm-power-guard-lite/backend/venv/bin/python bot.py
 Restart=always
 RestartSec=5

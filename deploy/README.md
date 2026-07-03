@@ -1,4 +1,4 @@
-# 部署说明（masterc.cn）
+# 部署说明（oxelia51.com）
 
 ## 服务器目录
 
@@ -14,34 +14,39 @@
 ## 首次初始化
 
 ```bash
-ssh root@47.108.202.199
+ssh <your-server>
 bash /opt/dorm-power-guard-lite/deploy/bootstrap-server.sh
 ```
 
-将现有 `/root/dorm-power-guard-lite/backend/.env` 复制到 `/opt/dorm-power-guard-lite/backend/.env`，并补充：
+在 `backend/.env` 中配置（勿提交到 Git）：
 
 ```env
+APP_DEBUG=false
 ADMIN_USERNAME=root
-ADMIN_PASSWORD=783688
-ADMIN_JWT_SECRET=请改成随机长字符串
+ADMIN_PASSWORD=<至少12位强随机密码>
+ADMIN_JWT_SECRET=<至少32位随机字符串>
+QQ_BOT_API_TOKEN=<至少32位随机字符串>
 ```
+
+修改密码或 JWT 后执行：`systemctl restart dorm-backend dorm-nonebot`
 
 ## GitHub Secrets
 
 | Name | Value |
 |------|-------|
-| SSH_HOST | 47.108.202.199 |
-| SSH_USER | root |
+| SSH_HOST | 服务器 IP 或主机名 |
+| SSH_USER | SSH 用户名 |
 | SSH_PRIVATE_KEY | 部署专用私钥 |
 
 ## 登录
 
-- 地址：https://masterc.cn
-- 用户：`root`
-- 密码：`783688`
+- 地址：https://oxelia51.com（备案通过后）或服务器 IP
+- 用户名：`ADMIN_USERNAME`（默认 root）
+- 密码：服务器 `backend/.env` 中的 `ADMIN_PASSWORD`（非代码默认值）
 
 ## 内存优化
 
 - 前端在 GitHub Actions 构建，服务器不安装 Node
 - systemd `MemoryMax` 限制 backend 256M / nonebot 128M
+- NapCat Docker `mem_limit: 256m`
 - MySQL `innodb_buffer_pool_size=64M`

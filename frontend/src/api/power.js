@@ -1,8 +1,5 @@
 import api from './index'
 
-// 创建电费记录
-export const createRecord = (data) => api.post('/power/records', data)
-
 // 获取最新记录
 export const getLatestRecord = (dormNumber) => api.get(`/power/records/${dormNumber}/latest`)
 

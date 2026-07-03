@@ -4,6 +4,7 @@ services:
     container_name: napcat
     restart: unless-stopped
     network_mode: host
+    mem_limit: 256m
     environment:
       - NAPCAT_QUICK_ACCOUNT=${NAPCAT_QUICK_ACCOUNT:-1270667498}
     volumes:

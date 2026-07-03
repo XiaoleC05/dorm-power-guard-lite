@@ -46,6 +46,7 @@ else
     --name napcat \
     --restart unless-stopped \
     --network host \
+    --memory 256m \
     -e NAPCAT_QUICK_ACCOUNT="$QQ_ACCOUNT" \
     -v /opt/napcat/QQ:/root/.config/QQ \
     -v /opt/napcat/config:/app/napcat/config \
@@ -55,7 +56,16 @@ fi
 sleep 12
 
 echo "[5] Status"
-STATUS=$(curl -s http://127.0.0.1:8080/api/get_status || true)
+ENV_FILE="/opt/dorm-power-guard-lite/backend/.env"
+BOT_TOKEN=""
+if [ -f "$ENV_FILE" ]; then
+  BOT_TOKEN=$(grep -E '^QQ_BOT_API_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '\r' || true)
+fi
+CURL_HEADERS=()
+if [ -n "$BOT_TOKEN" ]; then
+  CURL_HEADERS=(-H "Authorization: Bearer $BOT_TOKEN")
+fi
+STATUS=$(curl -s "${CURL_HEADERS[@]}" http://127.0.0.1:8080/api/get_status || true)
 echo "$STATUS"
 if echo "$STATUS" | grep -q '"status":"ok"'; then
   echo "NapCat connected"

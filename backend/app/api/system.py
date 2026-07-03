@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services import CrawlerService, PowerRecordService
 from app.config import settings
+from app.bot_client import bot_api_headers
 import logging
 import requests
 
@@ -114,6 +115,7 @@ async def send_power_report(db: Session = Depends(get_db)):
         resp = requests.post(
             f"{settings.QQ_BOT_API_URL}/api/send_group_msg",
             json={"group_id": target_group, "message": msg},
+            headers=bot_api_headers(),
             timeout=10,
         )
 
@@ -173,7 +175,11 @@ async def check_qq_status():
     
     try:
         # 检查NoneBot状态
-        response = requests.get(f"{settings.QQ_BOT_API_URL}/api/get_status", timeout=5)
+        response = requests.get(
+            f"{settings.QQ_BOT_API_URL}/api/get_status",
+            headers=bot_api_headers(),
+            timeout=5,
+        )
         if response.status_code == 200:
             result = response.json()
             if result.get("status") == "ok" and result.get("retcode") == 0:

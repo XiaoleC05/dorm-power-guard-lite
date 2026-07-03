@@ -2,6 +2,12 @@
 NoneBot 机器人主文件
 用于接收外部 HTTP 请求并发送 QQ 消息
 """
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 import nonebot
 from nonebot.adapters.onebot.v11 import Adapter
 

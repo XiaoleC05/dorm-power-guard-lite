@@ -5,10 +5,7 @@ pymysql
 cryptography
 apscheduler
 requests
-beautifulsoup4
-lxml
 python-multipart
 pydantic
 pydantic-settings
-email-validator
 python-dotenv

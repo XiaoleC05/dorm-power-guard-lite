@@ -1,7 +1,11 @@
 """
 HTTP API 插件：仅提供群消息发送（机器人 QQ 1270667498 固定，由 NapCat 登录）。
 """
-from fastapi import APIRouter, Request, HTTPException
+import os
+import secrets
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from nonebot import get_bot
 from nonebot.log import logger
@@ -9,8 +13,24 @@ from nonebot.log import logger
 router = APIRouter()
 
 
+def _verify_api_token(authorization: Optional[str] = Header(None)) -> None:
+    """校验 Bearer Token；未配置 QQ_BOT_API_TOKEN 时仅记录警告（兼容迁移期）。"""
+    expected = (os.environ.get("QQ_BOT_API_TOKEN") or "").strip()
+    if not expected:
+        logger.warning("QQ_BOT_API_TOKEN 未配置，HTTP API 处于无鉴权状态")
+        return
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="缺少 API Token")
+    token = authorization[7:].strip()
+    if not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=403, detail="无效 API Token")
+
+
 @router.post("/send_group_msg")
-async def send_group_msg(request: Request):
+async def send_group_msg(
+    request: Request,
+    _: None = Depends(_verify_api_token),
+):
     """发送群消息 API"""
     try:
         data = await request.json()
@@ -34,7 +54,7 @@ async def send_group_msg(request: Request):
 
 
 @router.get("/get_status")
-async def get_status():
+async def get_status(_: None = Depends(_verify_api_token)):
     """获取机器人状态"""
     try:
         bot = get_bot()

@@ -3,7 +3,7 @@
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -47,16 +47,20 @@ class Settings(BaseSettings):
     # QQ机器人（NoneBot + NapCat，仅群消息）
     QQ_BOT_ENABLED: bool = False
     QQ_BOT_API_URL: Optional[str] = None
+    QQ_BOT_API_TOKEN: Optional[str] = None  # NoneBot HTTP API 鉴权，后端请求时带 Bearer
     QQ_BOT_ID: str = "1270667498"  # 机器人登录QQ号，固定不可改
     QQ_BOT_GROUP_ID: Optional[str] = "6011223303"  # 告警消息发送目标群号，可修改
+
+    # 调试模式：允许弱口令、对外返回详细异常（仅本地开发）
+    APP_DEBUG: bool = False
 
     # 默认告警阈值
     DEFAULT_ALERT_THRESHOLD: float = 20.0
 
-    # 管理登录（唯一用户，无注册/改密）
+    # 管理登录（唯一用户，无注册/改密；生产环境必须在 .env 中配置）
     ADMIN_USERNAME: str = "root"
-    ADMIN_PASSWORD: str = "783688"
-    ADMIN_JWT_SECRET: str = "dorm-power-guard-masterc-secret"
+    ADMIN_PASSWORD: str = ""
+    ADMIN_JWT_SECRET: str = ""
     ADMIN_TOKEN_EXPIRE_HOURS: int = 168
 
     @field_validator("DEFAULT_ALERT_THRESHOLD", mode="before")
@@ -65,6 +69,20 @@ class Settings(BaseSettings):
         if v == "" or v is None:
             return 20.0
         return v
+
+    @model_validator(mode="after")
+    def validate_security_settings(self) -> "Settings":
+        if self.APP_DEBUG:
+            return self
+        if not self.ADMIN_PASSWORD or len(self.ADMIN_PASSWORD) < 12:
+            raise ValueError(
+                "生产环境须在 backend/.env 设置 ADMIN_PASSWORD（至少 12 位）"
+            )
+        if not self.ADMIN_JWT_SECRET or len(self.ADMIN_JWT_SECRET) < 32:
+            raise ValueError(
+                "生产环境须在 backend/.env 设置 ADMIN_JWT_SECRET（至少 32 位）"
+            )
+        return self
 
 
 settings = Settings()

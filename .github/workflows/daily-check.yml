@@ -1,8 +1,7 @@
-name: 宿舍电费每日检测
+# 已停用定时任务，保留 workflow_dispatch 供手动触发（主部署见 deploy.yml）
+name: 宿舍电费每日检测（已归档）
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
@@ -58,6 +57,9 @@ jobs:
           QQ_MSG_API_KEY=${{ secrets.QQ_MSG_API_KEY }}
           QQ_GROUP_ID=${{ vars.QQ_GROUP_ID }}
           DEFAULT_ALERT_THRESHOLD=10
+          APP_DEBUG=true
+          ADMIN_PASSWORD=ci-temporary-password-12chars
+          ADMIN_JWT_SECRET=ci-temporary-jwt-secret-32chars-minimum
           ENVEOF
       - name: 等待 MySQL 就绪
         run: |

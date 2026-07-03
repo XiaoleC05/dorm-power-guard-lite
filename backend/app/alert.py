@@ -4,6 +4,7 @@ from typing import Dict, Optional
 
 import requests
 
+from app.bot_client import bot_api_headers
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class QQBotAlert:
             )
             url = f"{self.api_url}/api/send_group_msg"
             data = {"group_id": group_num, "message": message}
-            headers = {"Content-Type": "application/json"}
+            headers = bot_api_headers()
 
             logger.info(
                 f"正在发送QQ群告警到群 {group_num}：{dorm_number}, {category_name}余量 {balance:.2f} 度"

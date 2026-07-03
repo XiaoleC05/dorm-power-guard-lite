@@ -11,8 +11,8 @@ from app.api import router
 from app.scheduler import init_scheduler, shutdown_scheduler
 from app.database import SessionLocal
 from app.services import CrawlerService
+from app.config import settings
 import logging
-import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +81,17 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"未处理的异常: {exc}", exc_info=True)
     logger.error(f"请求路径: {request.url.path}")
     logger.error(f"请求方法: {request.method}")
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
+    if settings.APP_DEBUG:
+        content = {
             "detail": str(exc),
             "type": type(exc).__name__,
-            "path": request.url.path
+            "path": request.url.path,
         }
+    else:
+        content = {"detail": "服务器内部错误，请稍后重试"}
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=content,
     )
 
 

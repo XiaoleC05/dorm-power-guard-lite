@@ -196,8 +196,8 @@
       <div v-if="chartLoading" class="loading-container">
         <el-skeleton :rows="5" animated />
       </div>
-      <div v-else-if="hasChartData" ref="chartContainer" class="chart-container"></div>
-      <el-empty v-else description="暂无图表数据" :image-size="100" />
+      <div v-show="!chartLoading && hasChartData" ref="chartContainer" class="chart-container"></div>
+      <el-empty v-if="!chartLoading && !hasChartData" description="暂无图表数据" :image-size="100" />
     </el-card>
 
     <!-- 告警规则编辑对话框 -->
@@ -268,11 +268,11 @@ import { manualCrawl, getConfig, checkQQStatus, sendPowerReport, getQQConfig } f
 import { getCurrentAlertRule, createAlertRule, updateCurrentAlertRule } from '../api/alert'
 import { formatApiError } from '../utils/apiError'
 import * as echarts from 'echarts/core'
-import { BarChart } from 'echarts/charts'
+import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-echarts.use([BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 import dayjs from 'dayjs'
 
 const loading = ref(false)
@@ -519,147 +519,130 @@ const saveRule = async () => {
 // 图表相关
 const hasChartData = ref(false)
 
+const buildBalanceTrendPoints = (records, mode) => {
+  const sorted = [...records].sort(
+    (a, b) => new Date(a.record_time).getTime() - new Date(b.record_time).getTime()
+  )
+  const buckets = {}
+  for (const record of sorted) {
+    const monthKey = dayjs(record.record_time).format('YYYY-MM')
+    const dayKey = dayjs(record.record_time).format('YYYY-MM-DD')
+    if (mode === 'daily' && monthKey !== selectedMonth.value) continue
+    const key = mode === 'monthly' ? monthKey : dayKey
+    buckets[key] = record
+  }
+  return Object.keys(buckets)
+    .sort()
+    .map((key) => {
+      const record = buckets[key]
+      const kbalance = record.kbalance ?? record.balance
+      return {
+        label: mode === 'monthly' ? dayjs(key).format('YYYY-MM') : dayjs(key).format('MM-DD'),
+        kbalance: kbalance ?? null,
+        zbalance: record.zbalance ?? null,
+      }
+    })
+    .filter((p) => p.kbalance !== null || p.zbalance !== null)
+}
+
+const renderBalanceChart = (points, mode) => {
+  if (!chartContainer.value || points.length === 0) return false
+
+  if (!chartInstance) {
+    chartInstance = echarts.init(chartContainer.value)
+  }
+
+  const labels = points.map((p) => p.label)
+  const kbalances = points.map((p) => p.kbalance)
+  const zbalances = points.map((p) => p.zbalance)
+  const hasZ = zbalances.some((v) => v !== null && v !== undefined)
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        let html = `<div style="font-weight:bold;margin-bottom:4px">${params[0].axisValue}</div>`
+        params.forEach((param) => {
+          if (param.value === null || param.value === undefined) return
+          html += `<div>${param.marker}${param.seriesName}: <b>${Number(param.value).toFixed(2)} 度</b></div>`
+        })
+        return html
+      },
+    },
+    legend: {
+      data: hasZ ? ['空调余量', '照明余量'] : ['空调余量'],
+      top: 8,
+    },
+    grid: { left: '3%', right: '4%', bottom: mode === 'daily' ? '18%' : '10%', top: '15%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLabel: { rotate: mode === 'daily' ? 45 : 0, fontSize: 11 },
+    },
+    yAxis: {
+      type: 'value',
+      name: '余量（度）',
+      scale: true,
+    },
+    series: [
+      {
+        name: '空调余量',
+        type: 'line',
+        smooth: true,
+        showSymbol: points.length <= 31,
+        data: kbalances,
+        itemStyle: { color: '#667eea' },
+        areaStyle: { color: 'rgba(102, 126, 234, 0.08)' },
+      },
+    ],
+  }
+
+  if (hasZ) {
+    option.series.push({
+      name: '照明余量',
+      type: 'line',
+      smooth: true,
+      showSymbol: points.length <= 31,
+      data: zbalances,
+      itemStyle: { color: '#67c23a' },
+      areaStyle: { color: 'rgba(103, 194, 58, 0.08)' },
+    })
+  }
+
+  chartInstance.setOption(option, true)
+  chartInstance.resize()
+  return true
+}
+
 const loadChartData = async () => {
   if (!dormNumber.value) return
-  
+
   chartLoading.value = true
   hasChartData.value = false
-  
+
   try {
     let records = []
-    
     if (chartViewMode.value === 'monthly') {
-      // 按月显示：近一年12个月每月电量
-      const endDate = dayjs()
+      const endDate = dayjs().endOf('day')
       const startDate = endDate.subtract(11, 'month').startOf('month')
       records = await getRecordsByRange(dormNumber.value, startDate.toDate(), endDate.toDate())
-      
-      // 按月份分组，计算每月总用电量
-      const monthlyData = {}
-      records.forEach(record => {
-        const month = dayjs(record.record_time).format('YYYY-MM')
-        if (!monthlyData[month]) {
-          monthlyData[month] = {
-            kconsumption: 0,
-            zconsumption: 0,
-            records: []
-          }
-        }
-        monthlyData[month].records.push(record)
-      })
-      
-      // 计算每月用电量（取最后一条记录的余量 - 第一条记录的余量，或累计consumption）
-      const monthlyRecords = []
-      Object.keys(monthlyData).sort().forEach(month => {
-        const monthRecords = monthlyData[month].records.sort((a, b) => 
-          new Date(a.record_time) - new Date(b.record_time)
-        )
-        if (monthRecords.length > 0) {
-          const first = monthRecords[0]
-          const last = monthRecords[monthRecords.length - 1]
-          
-          let kconsumption = 0
-          let zconsumption = 0
-          
-          // 累计consumption或计算差值
-          monthRecords.forEach((r, idx) => {
-            if (idx > 0 && r.kpower_consumption !== null && r.kpower_consumption !== undefined) {
-              kconsumption += r.kpower_consumption
-            }
-            if (idx > 0 && r.zpower_consumption !== null && r.zpower_consumption !== undefined) {
-              zconsumption += r.zpower_consumption
-            }
-          })
-          
-          // 如果没有consumption数据，使用差值
-          if (kconsumption === 0 && first.kbalance !== null && last.kbalance !== null) {
-            kconsumption = Math.max(0, first.kbalance - last.kbalance)
-          }
-          if (zconsumption === 0 && first.zbalance !== null && last.zbalance !== null) {
-            zconsumption = Math.max(0, first.zbalance - last.zbalance)
-          }
-          
-          monthlyRecords.push({
-            month,
-            kconsumption,
-            zconsumption,
-            total: kconsumption + zconsumption
-          })
-        }
-      })
-      
-      await nextTick()
-      if (monthlyRecords.length > 0) {
-        hasChartData.value = true
-        await nextTick()
-        if (chartContainer.value) {
-          initMonthlyChart(monthlyRecords)
-        }
-      } else {
-        hasChartData.value = false
-      }
     } else {
-      // 按日显示：选中月份中每一天的电量
       const startDate = dayjs(selectedMonth.value).startOf('month')
       const endDate = dayjs(selectedMonth.value).endOf('month')
       records = await getRecordsByRange(dormNumber.value, startDate.toDate(), endDate.toDate())
-      
-      // 按日期分组
-      const dailyData = {}
-      records.forEach(record => {
-        const day = dayjs(record.record_time).format('YYYY-MM-DD')
-        if (!dailyData[day]) {
-          dailyData[day] = []
-        }
-        dailyData[day].push(record)
-      })
-      
-      // 计算每天用电量
-      const dailyRecords = []
-      Object.keys(dailyData).sort().forEach(day => {
-        const dayRecords = dailyData[day].sort((a, b) => 
-          new Date(a.record_time) - new Date(b.record_time)
-        )
-        if (dayRecords.length > 0) {
-          let kconsumption = 0
-          let zconsumption = 0
-          
-          dayRecords.forEach((r, idx) => {
-            if (idx > 0 && r.kpower_consumption !== null && r.kpower_consumption !== undefined) {
-              kconsumption += r.kpower_consumption
-            }
-            if (idx > 0 && r.zpower_consumption !== null && r.zpower_consumption !== undefined) {
-              zconsumption += r.zpower_consumption
-            }
-          })
-          
-          if (dayRecords.length > 1) {
-            const first = dayRecords[0]
-            const last = dayRecords[dayRecords.length - 1]
-            if (kconsumption === 0 && first.kbalance !== null && last.kbalance !== null) {
-              kconsumption = Math.max(0, first.kbalance - last.kbalance)
-            }
-            if (zconsumption === 0 && first.zbalance !== null && last.zbalance !== null) {
-              zconsumption = Math.max(0, first.zbalance - last.zbalance)
-            }
-          }
-          
-          dailyRecords.push({
-            day,
-            kconsumption,
-            zconsumption,
-            total: kconsumption + zconsumption
-          })
-        }
-      })
-      
-      await nextTick()
-      if (chartContainer.value && dailyRecords.length > 0) {
-        initDailyChart(dailyRecords)
-        hasChartData.value = true
-      } else {
-        hasChartData.value = false
-      }
+    }
+
+    const points = buildBalanceTrendPoints(records || [], chartViewMode.value)
+    chartLoading.value = false
+    if (points.length === 0) {
+      hasChartData.value = false
+      return
+    }
+
+    hasChartData.value = true
+    await nextTick()
+    if (!renderBalanceChart(points, chartViewMode.value)) {
+      hasChartData.value = false
     }
   } catch (error) {
     hasChartData.value = false
@@ -679,158 +662,6 @@ const onSelectedMonthChange = () => {
   if (chartViewMode.value === 'daily') {
     loadChartData()
   }
-}
-
-const initMonthlyChart = (monthlyRecords) => {
-  if (!chartContainer.value) return
-  
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartContainer.value)
-  }
-  
-  const months = monthlyRecords.map(r => dayjs(r.month).format('MM月'))
-  const kconsumptions = monthlyRecords.map(r => r.kconsumption)
-  const zconsumptions = monthlyRecords.map(r => r.zconsumption)
-  const hasZConsumption = zconsumptions.some(v => v > 0)
-  
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(50, 50, 50, 0.9)',
-      borderColor: '#667eea',
-      borderWidth: 1,
-      textStyle: { color: '#fff' },
-      formatter: (params) => {
-        let result = `<div style="font-weight: bold; margin-bottom: 5px;">${params[0].name}</div>`
-        params.forEach(param => {
-          result += `<div style="margin: 3px 0;">
-            <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; border-radius: 50%; margin-right: 5px;"></span>
-            ${param.seriesName}: <span style="font-weight: bold;">${param.value.toFixed(2)} 度</span>
-          </div>`
-        })
-        return result
-      }
-    },
-    legend: {
-      data: hasZConsumption ? ['空调用电量', '照明用电量'] : ['空调用电量'],
-      top: 10
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '10%',
-      top: '15%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: months,
-      axisLabel: { fontSize: 11 },
-      axisLine: { lineStyle: { color: '#e0e0e0' } }
-    },
-    yAxis: {
-      type: 'value',
-      name: '用电量（度）',
-      nameTextStyle: { fontSize: 12 },
-      axisLabel: { formatter: '{value}' },
-      splitLine: { lineStyle: { type: 'dashed', color: '#e0e0e0' } }
-    },
-    series: [
-      {
-        name: '空调用电量',
-        data: kconsumptions,
-        type: 'bar',
-        itemStyle: { color: '#667eea' }
-      }
-    ]
-  }
-  
-  if (hasZConsumption) {
-    option.series.push({
-      name: '照明用电量',
-      data: zconsumptions,
-      type: 'bar',
-      itemStyle: { color: '#67c23a' }
-    })
-  }
-  
-  chartInstance.setOption(option, true)
-}
-
-const initDailyChart = (dailyRecords) => {
-  if (!chartContainer.value) return
-  
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartContainer.value)
-  }
-  
-  const days = dailyRecords.map(r => dayjs(r.day).format('DD日'))
-  const kconsumptions = dailyRecords.map(r => r.kconsumption)
-  const zconsumptions = dailyRecords.map(r => r.zconsumption)
-  const hasZConsumption = zconsumptions.some(v => v > 0)
-  
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(50, 50, 50, 0.9)',
-      borderColor: '#667eea',
-      borderWidth: 1,
-      textStyle: { color: '#fff' },
-      formatter: (params) => {
-        let result = `<div style="font-weight: bold; margin-bottom: 5px;">${params[0].name}</div>`
-        params.forEach(param => {
-          result += `<div style="margin: 3px 0;">
-            <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; border-radius: 50%; margin-right: 5px;"></span>
-            ${param.seriesName}: <span style="font-weight: bold;">${param.value.toFixed(2)} 度</span>
-          </div>`
-        })
-        return result
-      }
-    },
-    legend: {
-      data: hasZConsumption ? ['空调用电量', '照明用电量'] : ['空调用电量'],
-      top: 10
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '10%',
-      top: '15%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: days,
-      axisLabel: { rotate: 45, fontSize: 11 },
-      axisLine: { lineStyle: { color: '#e0e0e0' } }
-    },
-    yAxis: {
-      type: 'value',
-      name: '用电量（度）',
-      nameTextStyle: { fontSize: 12 },
-      axisLabel: { formatter: '{value}' },
-      splitLine: { lineStyle: { type: 'dashed', color: '#e0e0e0' } }
-    },
-    series: [
-      {
-        name: '空调用电量',
-        data: kconsumptions,
-        type: 'bar',
-        itemStyle: { color: '#667eea' }
-      }
-    ]
-  }
-  
-  if (hasZConsumption) {
-    option.series.push({
-      name: '照明用电量',
-      data: zconsumptions,
-      type: 'bar',
-      itemStyle: { color: '#67c23a' }
-    })
-  }
-  
-  chartInstance.setOption(option, true)
 }
 
 onMounted(async () => {

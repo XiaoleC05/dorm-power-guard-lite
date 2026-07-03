@@ -2,7 +2,7 @@
 
 西华大学宿舍电费监控系统 - MVP快速验证方案
 
-**管理员QQ：714085964**
+**机器人QQ：1270667498 · 告警群：6011223303**
 
 > 本项目专门为西华大学学生设计，用于监控宿舍电费使用情况，避免因电费不足导致停电。
 
@@ -425,9 +425,8 @@ BASE_URL=https://yourdomain.com  # 生产环境
 ```env
 # QQ机器人配置（NoneBot）
 QQ_BOT_ENABLED=true
-QQ_BOT_API_URL=http://localhost:8080
-QQ_BOT_GROUP_ID=123456789
-QQ_BOT_USER_ID=
+QQ_BOT_API_URL=http://127.0.0.1:8080
+QQ_BOT_GROUP_ID=6011223303
 QQ_BOT_ACCESS_TOKEN=
 ```
 
@@ -712,7 +711,7 @@ CREATE INDEX idx_record_time ON power_records(record_time);
 | email_enabled | BOOLEAN | 是否启用邮件告警，True时当余量低于阈值会发送邮件 |
 | email_address | VARCHAR(255) | 邮件告警接收邮箱地址，启用邮件告警时必须填写 |
 | qq_enabled | BOOLEAN | 是否启用QQ告警，True时当余量低于阈值会发送QQ消息 |
-| qq_receiver_id | VARCHAR(50) | QQ告警接收者ID，可以是QQ号（私聊）或群号（群聊，通常>=1000000000），启用QQ告警时必须填写 |
+| qq_receiver_id | VARCHAR(50) | 已废弃，告警群号请用系统配置 QQ_BOT_GROUP_ID |
 | last_alert_time | DATETIME | 最后告警时间，用于防止频繁告警，记录最近一次成功发送告警的时间 |
 | created_at | DATETIME | 创建时间，规则创建的时间 |
 | updated_at | DATETIME | 更新时间，规则最后修改的时间 |
@@ -1079,7 +1078,7 @@ QQ_BOT_ENABLED=true
 QQ_BOT_API_URL=http://127.0.0.1:8080
 ```
 
-告警规则中的接收 QQ/群号仍在前端「告警规则」里配置（qq_receiver_id）。
+告警群号在「系统配置」中设置（`QQ_BOT_GROUP_ID`，默认 6011223303）；机器人 QQ 固定为 1270667498，仅发送群消息。
 
 **5. 防火墙（仅需时开放）**
 
@@ -1273,7 +1272,8 @@ tail -f backend/logs/app.log
 
 ## 联系与支持
 
-- **管理员QQ**：714085964
+- **机器人QQ**：1270667498（固定）
+- **告警群**：6011223303（可在系统配置修改）
 - **项目用途**：仅供西华大学学生个人使用
 - **数据安全**：所有数据存储在本地，不会上传到第三方服务器
 

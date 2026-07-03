@@ -49,7 +49,7 @@ class AlertRule(Base):
     email_enabled = Column(Boolean, default=False, nullable=False, comment="是否启用邮件告警，True时当余量低于阈值会发送邮件")
     email_address = Column(String(255), nullable=True, comment="邮件告警接收邮箱地址，启用邮件告警时必须填写")
     qq_enabled = Column(Boolean, default=False, nullable=False, comment="是否启用QQ告警，True时当余量低于阈值会发送QQ消息")
-    qq_receiver_id = Column(String(50), nullable=True, comment="QQ告警接收者ID，可以是QQ号（私聊）或群号（群聊，通常>=1000000000），启用QQ告警时必须填写")
+    qq_receiver_id = Column(String(50), nullable=True, comment="已废弃，告警群号改由 QQ_BOT_GROUP_ID 配置")
     last_alert_time = Column(DateTime, nullable=True, comment="最后告警时间，用于防止频繁告警，记录最近一次成功发送告警的时间")
     created_at = Column(DateTime, nullable=False, server_default=func.now(), comment="创建时间，规则创建的时间")
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now(), comment="更新时间，规则最后修改的时间")

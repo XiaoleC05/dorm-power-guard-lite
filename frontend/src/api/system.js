@@ -11,3 +11,6 @@ export const getConfig = () => api.get('/system/config')
 
 // 检查QQ机器人连接状态
 export const checkQQStatus = () => api.get('/system/qq-status')
+
+// 发送 QQ 实时电费报告
+export const sendPowerReport = () => api.post('/system/report')

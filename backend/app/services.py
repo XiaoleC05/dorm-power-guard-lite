@@ -14,7 +14,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-LOW_BALANCE_ALERT_THRESHOLD = 10.0
+
+def _threshold_for(rule: AlertRule, category: str) -> float:
+    """读取规则阈值，未设置时回退到 DEFAULT_ALERT_THRESHOLD。"""
+    if category == "ac" and rule.kthreshold is not None:
+        return rule.kthreshold
+    if category == "light" and rule.zthreshold is not None:
+        return rule.zthreshold
+    return settings.DEFAULT_ALERT_THRESHOLD
 
 
 def is_qq_alert_paused() -> tuple[bool, Optional[str]]:
@@ -79,11 +86,18 @@ class PowerRecordService:
         ).order_by(desc(PowerRecord.record_time)).first()
     
     @staticmethod
-    def get_records(db: Session, dorm_number: str, limit: int = 100) -> List[PowerRecord]:
-        """获取电费记录列表"""
+    def count_records(db: Session, dorm_number: str) -> int:
+        """统计电费记录总数"""
         return db.query(PowerRecord).filter(
             PowerRecord.dorm_number == dorm_number
-        ).order_by(desc(PowerRecord.record_time)).limit(limit).all()
+        ).count()
+
+    @staticmethod
+    def get_records(db: Session, dorm_number: str, limit: int = 100, offset: int = 0) -> List[PowerRecord]:
+        """获取电费记录列表（分页）"""
+        return db.query(PowerRecord).filter(
+            PowerRecord.dorm_number == dorm_number
+        ).order_by(desc(PowerRecord.record_time)).offset(offset).limit(limit).all()
     
     @staticmethod
     def get_records_by_date_range(db: Session, dorm_number: str, 
@@ -108,10 +122,10 @@ class AlertRuleService:
             if not rule.email_address or not rule.email_address.strip():
                 raise ValueError("启用邮件告警时必须输入接收邮箱地址")
         
-        # 验证：启用QQ告警时必须提供接收QQ号或群号
+        # 验证：启用QQ告警时须在系统配置中填写告警群号
         if rule.qq_enabled:
-            if not rule.qq_receiver_id or not rule.qq_receiver_id.strip():
-                raise ValueError("启用QQ告警时必须输入接收QQ号或群号")
+            if not settings.QQ_BOT_GROUP_ID or not str(settings.QQ_BOT_GROUP_ID).strip():
+                raise ValueError("启用QQ告警时须在系统配置中填写告警群号")
         
         # 处理空字符串，转换为None以保持数据库一致性
         if 'room_id' in rule_data:
@@ -125,13 +139,8 @@ class AlertRuleService:
                 rule_data['email_address'] = None
             elif rule_data['email_address']:
                 rule_data['email_address'] = rule_data['email_address'].strip()
-        
-        if 'qq_receiver_id' in rule_data:
-            if rule_data['qq_receiver_id'] == '' or (rule_data['qq_receiver_id'] and not rule_data['qq_receiver_id'].strip()):
-                rule_data['qq_receiver_id'] = None
-            elif rule_data['qq_receiver_id']:
-                rule_data['qq_receiver_id'] = rule_data['qq_receiver_id'].strip()
-        
+
+        rule_data.pop('qq_receiver_id', None)
         db_rule = AlertRule(**rule_data)
         db.add(db_rule)
         db.commit()
@@ -168,11 +177,10 @@ class AlertRuleService:
             if not email_address or not str(email_address).strip():
                 raise ValueError("启用邮件告警时必须输入接收邮箱地址")
         
-        # 验证：启用QQ告警时必须提供接收QQ号或群号
+        # 验证：启用QQ告警时须在系统配置中填写告警群号
         if final_qq_enabled:
-            qq_receiver_id = update_data.get('qq_receiver_id', rule.qq_receiver_id)
-            if not qq_receiver_id or not str(qq_receiver_id).strip():
-                raise ValueError("启用QQ告警时必须输入接收QQ号或群号")
+            if not settings.QQ_BOT_GROUP_ID or not str(settings.QQ_BOT_GROUP_ID).strip():
+                raise ValueError("启用QQ告警时须在系统配置中填写告警群号")
         
         # 处理空字符串，转换为None以保持数据库一致性
         if 'room_id' in update_data:
@@ -187,12 +195,8 @@ class AlertRuleService:
             elif update_data['email_address']:
                 update_data['email_address'] = update_data['email_address'].strip()
         
-        if 'qq_receiver_id' in update_data:
-            if update_data['qq_receiver_id'] == '' or (update_data['qq_receiver_id'] and not update_data['qq_receiver_id'].strip()):
-                update_data['qq_receiver_id'] = None
-            elif update_data['qq_receiver_id']:
-                update_data['qq_receiver_id'] = update_data['qq_receiver_id'].strip()
-        
+        update_data.pop('qq_receiver_id', None)
+
         for key, value in update_data.items():
             setattr(rule, key, value)
         
@@ -323,9 +327,7 @@ class CrawlerService:
     
     @staticmethod
     def check_and_alert(db: Session, dorm_number: str, kbalance: Optional[float] = None, zbalance: Optional[float] = None, force_alert: bool = False):
-        """
-        Trigger alerts when AC or lighting balance drops below 10.
-        """
+        """当空调/照明余量低于规则阈值时触发告警。"""
         rule = AlertRuleService.get_rule(db, dorm_number)
 
         if not rule:
@@ -336,35 +338,40 @@ class CrawlerService:
             logger.info(f"Alert rule disabled: {dorm_number}")
             return
 
-        threshold = LOW_BALANCE_ALERT_THRESHOLD
+        kthreshold = _threshold_for(rule, "ac")
+        zthreshold = _threshold_for(rule, "light")
         logger.info(
-            f"Checking alerts: dorm={dorm_number}, kbalance={kbalance}, zbalance={zbalance}, threshold={threshold}, force={force_alert}"
+            f"Checking alerts: dorm={dorm_number}, kbalance={kbalance}, zbalance={zbalance}, "
+            f"kthreshold={kthreshold}, zthreshold={zthreshold}, force={force_alert}"
         )
 
         triggered = False
 
         if kbalance is not None:
-            if kbalance < threshold:
+            if kbalance < kthreshold:
                 triggered = True
-                logger.info(f"AC alert triggered: {dorm_number}, balance {kbalance:.2f} < {threshold:.2f}")
+                logger.info(f"AC alert triggered: {dorm_number}, balance {kbalance:.2f} < {kthreshold:.2f}")
                 CrawlerService._send_alert(
-                    db, rule, dorm_number, kbalance, threshold, 'ac', '空调', force_alert=force_alert
+                    db, rule, dorm_number, kbalance, kthreshold, 'ac', '空调', force_alert=force_alert
                 )
             else:
-                logger.info(f"AC balance normal: {dorm_number}, balance {kbalance:.2f} >= {threshold:.2f}")
+                logger.info(f"AC balance normal: {dorm_number}, balance {kbalance:.2f} >= {kthreshold:.2f}")
 
         if zbalance is not None:
-            if zbalance < threshold:
+            if zbalance < zthreshold:
                 triggered = True
-                logger.info(f"Lighting alert triggered: {dorm_number}, balance {zbalance:.2f} < {threshold:.2f}")
+                logger.info(f"Lighting alert triggered: {dorm_number}, balance {zbalance:.2f} < {zthreshold:.2f}")
                 CrawlerService._send_alert(
-                    db, rule, dorm_number, zbalance, threshold, 'light', '照明', force_alert=force_alert
+                    db, rule, dorm_number, zbalance, zthreshold, 'light', '照明', force_alert=force_alert
                 )
             else:
-                logger.info(f"Lighting balance normal: {dorm_number}, balance {zbalance:.2f} >= {threshold:.2f}")
+                logger.info(f"Lighting balance normal: {dorm_number}, balance {zbalance:.2f} >= {zthreshold:.2f}")
 
         if not triggered:
-            logger.info(f"No alert triggered for dorm {dorm_number}; both balances are >= 10")
+            logger.info(
+                f"No alert triggered for dorm {dorm_number}; balances above thresholds "
+                f"(ac>={kthreshold}, light>={zthreshold})"
+            )
 
     @staticmethod
     def _should_send_alert(db: Session, dorm_number: str, category: str, category_name: str, 
@@ -463,7 +470,10 @@ class CrawlerService:
                 logger.info(f"跳过QQ告警：{qq_reason}")
         
         # 检查告警配置
-        logger.info(f"告警配置检查：{dorm_number} ({category_name}), 邮件启用={rule.email_enabled}, QQ启用={rule.qq_enabled}, 邮件地址={rule.email_address}, QQ接收者={getattr(rule, 'qq_receiver_id', None)}")
+        logger.info(
+            f"告警配置检查：{dorm_number} ({category_name}), 邮件启用={rule.email_enabled}, "
+            f"QQ启用={rule.qq_enabled}, 邮件地址={rule.email_address}, 告警群={settings.QQ_BOT_GROUP_ID}"
+        )
         
         # 如果两种告警都被跳过，直接返回
         if not email_should_send and not qq_should_send:
@@ -487,7 +497,6 @@ class CrawlerService:
             email_enabled=rule.email_enabled and email_should_send,
             email_address=rule.email_address,
             qq_enabled=rule.qq_enabled and qq_should_send,
-            qq_receiver_id=getattr(rule, 'qq_receiver_id', None),  # 从规则中获取QQ接收者ID
             kbalance=kbalance,
             zbalance=zbalance
         )

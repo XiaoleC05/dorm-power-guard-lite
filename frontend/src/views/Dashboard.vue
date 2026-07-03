@@ -7,11 +7,23 @@
         监控面板
       </h2>
       <div class="page-actions">
+        <el-button type="primary" plain size="default" @click="handleSendReport" :loading="reportSending">
+          发送QQ报告
+        </el-button>
         <el-button type="success" size="default" @click="reloadData" :loading="reloading" :icon="Refresh">
           重新获取
         </el-button>
       </div>
     </div>
+
+    <el-alert
+      v-if="configMissing"
+      title="未配置宿舍号，请前往「系统配置」填写宿舍号（CRAWLER_DORM_NUMBER）"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="config-tip"
+    />
 
     <!-- 宿舍信息卡片 -->
     <el-card class="dorm-card" shadow="hover" v-loading="loading">
@@ -137,9 +149,18 @@
             <el-tag :type="alertRule.qq_enabled ? 'success' : 'info'">
               {{ alertRule.qq_enabled ? '启用' : '禁用' }}
             </el-tag>
-            <span v-if="alertRule.qq_enabled && alertRule.qq_receiver_id" style="margin-left: 8px; font-size: 12px; color: #909399;">
-              {{ alertRule.qq_receiver_id }}
+            <span v-if="alertRule.qq_enabled && qqGroupId" style="margin-left: 8px; font-size: 12px; color: #909399;">
+              群 {{ qqGroupId }}
             </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="机器人QQ">
+            <span>1270667498</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="QQ机器人状态" :span="2">
+            <el-tag :type="qqStatusTagType">{{ qqStatusText }}</el-tag>
+            <el-button link type="primary" style="margin-left: 8px" :loading="qqStatusLoading" @click="loadQQStatus">
+              刷新
+            </el-button>
           </el-descriptions-item>
         </el-descriptions>
         <div style="margin-top: 15px; text-align: right;">
@@ -241,18 +262,8 @@
         </el-form-item>
         <el-form-item label="QQ告警">
           <el-switch v-model="ruleForm.qq_enabled" />
-        </el-form-item>
-        <el-form-item 
-          label="QQ接收者" 
-          v-if="ruleForm.qq_enabled"
-          prop="qq_receiver_id"
-        >
-          <el-input 
-            v-model="ruleForm.qq_receiver_id" 
-            placeholder="请输入QQ号（私聊）或群号（群聊）"
-          />
-          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
-            输入QQ号发送私聊消息，输入群号发送群消息
+          <div v-if="ruleForm.qq_enabled" style="font-size: 12px; color: #909399; margin-top: 5px;">
+            启用后消息发送至系统配置中的告警群（当前：{{ qqGroupId || '未配置' }}）
           </div>
         </el-form-item>
       </el-form>
@@ -279,9 +290,9 @@ import {
   Plus
 } from '@element-plus/icons-vue'
 import { getLatestRecord, getRecords, getRecordsByRange } from '../api/power'
-import { manualCrawl } from '../api/system'
+import { manualCrawl, getConfig, checkQQStatus, sendPowerReport, getQQConfig } from '../api/system'
 import { getCurrentAlertRule, createAlertRule, updateCurrentAlertRule } from '../api/alert'
-import { getConfig } from '../api/system'
+import { formatApiError } from '../utils/apiError'
 import * as echarts from 'echarts/core'
 import { BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
@@ -293,6 +304,12 @@ import dayjs from 'dayjs'
 const loading = ref(false)
 const chartLoading = ref(false)
 const reloading = ref(false)
+const reportSending = ref(false)
+const qqStatusLoading = ref(false)
+const configMissing = ref(false)
+const qqStatusText = ref('未检查')
+const qqStatusTagType = ref('info')
+const qqGroupId = ref('')
 const latestRecord = ref(null)
 const alertRule = ref(null)
 const dormNumber = ref(null)
@@ -301,6 +318,16 @@ const chartViewMode = ref('monthly') // 'monthly' 或 'daily'
 const selectedMonth = ref(dayjs().format('YYYY-MM'))
 let chartInstance = null
 let resizeHandler = null
+
+const DEFAULT_THRESHOLD = 20
+
+const resolveThreshold = (category) => {
+  if (!alertRule.value) return DEFAULT_THRESHOLD
+  if (category === 'ac') {
+    return alertRule.value.kthreshold ?? DEFAULT_THRESHOLD
+  }
+  return alertRule.value.zthreshold ?? DEFAULT_THRESHOLD
+}
 
 const getBalanceClass = (balance, threshold = null) => {
   if (balance === null || balance === undefined) return ''
@@ -312,9 +339,9 @@ const getBalanceClass = (balance, threshold = null) => {
     return 'balance-normal'
   }
   
-  // 如果没有阈值，使用默认值
-  if (balance < 10) return 'balance-low'
-  if (balance < 20) return 'balance-warning'
+  // 如果没有阈值，使用规则默认值
+  if (balance < DEFAULT_THRESHOLD) return 'balance-low'
+  if (balance < DEFAULT_THRESHOLD * 1.5) return 'balance-warning'
   return 'balance-normal'
 }
 
@@ -337,7 +364,7 @@ const reloadData = async () => {
       ElMessage.error(response.message || '数据获取失败')
     }
   } catch (error) {
-    ElMessage.error('重新获取数据失败：' + (error.response?.data?.detail || error.response?.data?.message || error.message))
+    ElMessage.error('重新获取数据失败：' + formatApiError(error, '请求失败'))
   } finally {
     reloading.value = false
   }
@@ -364,12 +391,13 @@ const loadDormRecord = async () => {
 const loadAlertRule = async () => {
   try {
     const rule = await getCurrentAlertRule()
-    // 如果返回null或undefined，表示没有规则
     alertRule.value = rule || null
   } catch (error) {
-    // 404或204都表示没有规则
     if (error.response?.status === 404 || error.response?.status === 204) {
       alertRule.value = null
+    } else if (error.response?.status === 400) {
+      alertRule.value = null
+      ElMessage.warning(formatApiError(error, '获取告警规则失败，请先在系统配置中填写宿舍号'))
     } else {
       console.error('获取告警规则失败：', error)
       alertRule.value = null
@@ -377,16 +405,52 @@ const loadAlertRule = async () => {
   }
 }
 
+const loadQQStatus = async () => {
+  qqStatusLoading.value = true
+  try {
+    const status = await checkQQStatus()
+    if (status.success) {
+      qqStatusText.value = `已连接${status.bot_id ? `（Bot ${status.bot_id}）` : ''}`
+      qqStatusTagType.value = 'success'
+    } else {
+      qqStatusText.value = status.message || '未连接'
+      qqStatusTagType.value = 'danger'
+    }
+  } catch (error) {
+    qqStatusText.value = formatApiError(error, '检查失败')
+    qqStatusTagType.value = 'danger'
+  } finally {
+    qqStatusLoading.value = false
+  }
+}
+
+const handleSendReport = async () => {
+  reportSending.value = true
+  try {
+    const result = await sendPowerReport()
+    if (result.success) {
+      ElMessage.success(result.message || '报告已发送')
+    } else {
+      ElMessage.error(result.message || '发送失败')
+    }
+  } catch (error) {
+    ElMessage.error(formatApiError(error, '发送报告失败'))
+  } finally {
+    reportSending.value = false
+  }
+}
+
 const getDormStatusType = (record) => {
   if (!record || !record.record_time) return 'info'
   const kbalance = record.kbalance !== null && record.kbalance !== undefined ? record.kbalance : record.balance
   const zbalance = record.zbalance
-  const minBalance = Math.min(
-    kbalance !== null && kbalance !== undefined ? kbalance : Infinity,
-    zbalance !== null && zbalance !== undefined ? zbalance : Infinity
-  )
-  if (minBalance < 10) return 'danger'
-  if (minBalance < 20) return 'warning'
+  const kTh = resolveThreshold('ac')
+  const zTh = resolveThreshold('light')
+  const values = []
+  if (kbalance !== null && kbalance !== undefined) values.push({ balance: kbalance, threshold: kTh })
+  if (zbalance !== null && zbalance !== undefined) values.push({ balance: zbalance, threshold: zTh })
+  if (values.some(v => v.balance < v.threshold)) return 'danger'
+  if (values.some(v => v.balance < v.threshold * 1.5)) return 'warning'
   return 'success'
 }
 
@@ -397,12 +461,16 @@ const getDormStatusText = (record) => {
   }
   const kbalance = record.kbalance !== null && record.kbalance !== undefined ? record.kbalance : record.balance
   const zbalance = record.zbalance
-  const minBalance = Math.min(
-    kbalance !== null && kbalance !== undefined ? kbalance : Infinity,
-    zbalance !== null && zbalance !== undefined ? zbalance : Infinity
+  const kTh = resolveThreshold('ac')
+  const zTh = resolveThreshold('light')
+  const low = (kbalance !== null && kbalance !== undefined && kbalance < kTh)
+    || (zbalance !== null && zbalance !== undefined && zbalance < zTh)
+  const warn = !low && (
+    (kbalance !== null && kbalance !== undefined && kbalance < kTh * 1.5)
+    || (zbalance !== null && zbalance !== undefined && zbalance < zTh * 1.5)
   )
-  if (minBalance < 10) return '低电量'
-  if (minBalance < 20) return '警告'
+  if (low) return '低电量'
+  if (warn) return '警告'
   return '正常'
 }
 
@@ -417,8 +485,7 @@ const ruleForm = ref({
   enabled: true,
   email_enabled: false,
   email_address: '',
-  qq_enabled: false,
-  qq_receiver_id: ''
+  qq_enabled: false
 })
 
 const formRules = {
@@ -445,29 +512,16 @@ const formRules = {
       },
       trigger: 'blur'
     }
-  ],
-  qq_receiver_id: [
-    {
-      validator: (rule, value, callback) => {
-        if (ruleForm.value.qq_enabled) {
-          if (!value || !value.trim()) {
-            callback(new Error('启用QQ告警时必须输入接收QQ号或群号'))
-          } else {
-            const qqStr = value.trim()
-            const qqRegex = /^\d+$/
-            if (!qqRegex.test(qqStr)) {
-              callback(new Error('QQ号或群号必须是数字'))
-              return
-            }
-            callback()
-          }
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur'
-    }
   ]
+}
+
+const loadQQConfig = async () => {
+  try {
+    const cfg = await getQQConfig()
+    qqGroupId.value = cfg.group_id || ''
+  } catch {
+    qqGroupId.value = ''
+  }
 }
 
 const editRule = () => {
@@ -484,8 +538,7 @@ const editRule = () => {
     enabled: alertRule.value.enabled !== null && alertRule.value.enabled !== undefined ? alertRule.value.enabled : true,
     email_enabled: alertRule.value.email_enabled !== null && alertRule.value.email_enabled !== undefined ? alertRule.value.email_enabled : false,
     email_address: alertRule.value.email_address || '',
-    qq_enabled: alertRule.value.qq_enabled !== null && alertRule.value.qq_enabled !== undefined ? alertRule.value.qq_enabled : false,
-    qq_receiver_id: alertRule.value.qq_receiver_id || ''
+    qq_enabled: alertRule.value.qq_enabled !== null && alertRule.value.qq_enabled !== undefined ? alertRule.value.qq_enabled : false
   }
   showRuleDialog.value = true
 }
@@ -500,15 +553,10 @@ const saveRule = async () => {
       ruleForm.value.email_address = ''
     }
     
-    if (!ruleForm.value.qq_enabled) {
-      ruleForm.value.qq_receiver_id = ''
-    }
-    
     const submitData = {
       ...ruleForm.value,
       room_id: ruleForm.value.room_id && ruleForm.value.room_id.trim() ? ruleForm.value.room_id.trim() : null,
-      email_address: ruleForm.value.email_address && ruleForm.value.email_address.trim() ? ruleForm.value.email_address.trim() : null,
-      qq_receiver_id: ruleForm.value.qq_receiver_id && ruleForm.value.qq_receiver_id.trim() ? ruleForm.value.qq_receiver_id.trim() : null
+      email_address: ruleForm.value.email_address && ruleForm.value.email_address.trim() ? ruleForm.value.email_address.trim() : null
     }
     
     if (alertRule.value) {
@@ -523,7 +571,7 @@ const saveRule = async () => {
     await loadDormRecord()
   } catch (error) {
     if (error !== false) {
-      ElMessage.error('保存失败：' + (error.message || error))
+      ElMessage.error('保存失败：' + formatApiError(error, '未知错误'))
     }
   }
 }
@@ -843,23 +891,24 @@ const initDailyChart = (dailyRecords) => {
 }
 
 onMounted(async () => {
-  // 获取配置中的宿舍号
   try {
     const config = await getConfig()
-    dormNumber.value = config.dorm_number
-    ruleForm.value.dorm_number = config.dorm_number
-  } catch (error) {
-    // 404错误可能是后端服务未启动，不显示错误提示
-    if (error.response?.status !== 404) {
-      ElMessage.error('获取配置失败：' + (error.response?.data?.detail || error.message))
-    } else {
-      console.warn('后端服务可能未启动，无法获取配置')
+    configMissing.value = !config.configured
+    dormNumber.value = config.dorm_number || ''
+    ruleForm.value.dorm_number = config.dorm_number || ''
+    if (configMissing.value) {
+      ElMessage.warning('请先在「系统配置」中填写宿舍号')
     }
+  } catch (error) {
+    configMissing.value = true
+    ElMessage.error('获取配置失败：' + formatApiError(error))
   }
   
   await loadDormRecord()
   await loadAlertRule()
   await loadChartData()
+  await loadQQConfig()
+  await loadQQStatus()
   
   // 响应式调整图表
   resizeHandler = () => {
@@ -913,6 +962,10 @@ onUnmounted(() => {
 .page-actions {
   display: flex;
   gap: 12px;
+}
+
+.config-tip {
+  margin-bottom: 16px;
 }
 
 /* 卡片通用样式 */

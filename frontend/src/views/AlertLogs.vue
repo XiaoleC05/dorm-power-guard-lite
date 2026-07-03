@@ -60,6 +60,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getAlertLogs } from '../api/alert'
+import { formatApiError } from '../utils/apiError'
 import dayjs from 'dayjs'
 
 const loading = ref(false)
@@ -75,7 +76,7 @@ const loadLogs = async () => {
     const data = await getAlertLogs(null, 100)
     logs.value = data
   } catch (error) {
-    ElMessage.error('加载日志失败：' + error.message)
+    ElMessage.error('加载日志失败：' + formatApiError(error))
   } finally {
     loading.value = false
   }

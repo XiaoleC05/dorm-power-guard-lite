@@ -15,6 +15,6 @@ async def register_http_api():
     """注册 HTTP API 路由"""
     try:
         app.include_router(router, prefix="/api", tags=["HTTP API"])
-        logger.info("✅ HTTP API 路由注册成功: /api/send_group_msg, /api/send_private_msg, /api/get_status")
+        logger.info("✅ HTTP API 路由注册成功: /api/send_group_msg, /api/get_status")
     except Exception as e:
         logger.error(f"❌ HTTP API 路由注册失败：{e}")

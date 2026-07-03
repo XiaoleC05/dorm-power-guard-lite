@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from app.database import get_db
-from app.schemas import PowerRecordResponse, PowerRecordCreate
+from app.schemas import PowerRecordResponse, PowerRecordCreate, PowerRecordListResponse
 from app.services import PowerRecordService
 
 router = APIRouter()
@@ -35,15 +35,18 @@ async def get_latest_record(dorm_number: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
 
 
-@router.get("/records/{dorm_number}", response_model=List[PowerRecordResponse], summary="获取记录列表")
+@router.get("/records/{dorm_number}", response_model=PowerRecordListResponse, summary="获取记录列表")
 async def get_records(
     dorm_number: str,
     limit: int = 100,
+    offset: int = 0,
     db: Session = Depends(get_db)
 ):
-    """获取指定宿舍的电费记录列表"""
+    """获取指定宿舍的电费记录列表（分页）"""
     try:
-        return PowerRecordService.get_records(db, dorm_number, limit)
+        items = PowerRecordService.get_records(db, dorm_number, limit, offset)
+        total = PowerRecordService.count_records(db, dorm_number)
+        return {"items": items, "total": total}
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)

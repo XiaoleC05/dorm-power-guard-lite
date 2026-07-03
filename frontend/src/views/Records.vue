@@ -1,5 +1,14 @@
 <template>
   <div class="records-page">
+    <el-alert
+      v-if="configMissing"
+      title="未配置宿舍号，请前往「系统配置」填写宿舍号"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="config-tip"
+    />
+
     <el-card>
       <template #header>
         <div class="card-header">
@@ -66,8 +75,8 @@
         :page-sizes="[10, 20, 50, 100]"
         :total="total"
         layout="total, sizes, prev, pager, next, jumper"
-        @size-change="loadRecords"
-        @current-change="loadRecords"
+        @size-change="handlePageChange"
+        @current-change="handlePageChange"
         style="margin-top: 20px"
       />
     </el-card>
@@ -80,6 +89,7 @@ import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getRecords } from '../api/power'
 import { getConfig } from '../api/system'
+import { formatApiError } from '../utils/apiError'
 import dayjs from 'dayjs'
 
 const loading = ref(false)
@@ -88,6 +98,9 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const dormNumber = ref(null)
+const configMissing = ref(false)
+
+const DEFAULT_THRESHOLD = 20
 
 const formatTime = (time) => {
   return dayjs(time).format('YYYY-MM-DD HH:mm:ss')
@@ -95,39 +108,50 @@ const formatTime = (time) => {
 
 const getBalanceClass = (balance) => {
   if (balance === null || balance === undefined) return ''
-  if (balance < 10) return 'balance-low'
-  if (balance < 20) return 'balance-warning'
+  if (balance < DEFAULT_THRESHOLD) return 'balance-low'
+  if (balance < DEFAULT_THRESHOLD * 1.5) return 'balance-warning'
   return 'balance-normal'
 }
 
 const loadRecords = async () => {
   if (!dormNumber.value) {
+    configMissing.value = true
     ElMessage.warning('未配置宿舍号')
     return
   }
   
   loading.value = true
   try {
-    const data = await getRecords(dormNumber.value, pageSize.value)
-    records.value = data
-    total.value = data.length
+    const offset = (currentPage.value - 1) * pageSize.value
+    const data = await getRecords(dormNumber.value, pageSize.value, offset)
+    records.value = data.items
+    total.value = data.total
   } catch (error) {
     if (error.response?.status !== 404) {
-      ElMessage.error('加载记录失败：' + (error.response?.data?.detail || error.message))
+      ElMessage.error('加载记录失败：' + formatApiError(error))
     }
   } finally {
     loading.value = false
   }
 }
 
+const handlePageChange = () => {
+  loadRecords()
+}
+
 onMounted(async () => {
-  // 获取配置中的宿舍号
   try {
     const config = await getConfig()
-    dormNumber.value = config.dorm_number
+    configMissing.value = !config.configured
+    dormNumber.value = config.dorm_number || null
+    if (configMissing.value) {
+      ElMessage.warning('请先在「系统配置」中填写宿舍号')
+      return
+    }
     await loadRecords()
   } catch (error) {
-    ElMessage.error('获取配置失败：' + (error.response?.data?.detail || error.message))
+    configMissing.value = true
+    ElMessage.error('获取配置失败：' + formatApiError(error))
   }
 })
 </script>
@@ -136,6 +160,10 @@ onMounted(async () => {
 .records-page {
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.config-tip {
+  margin-bottom: 16px;
 }
 
 .records-page :deep(.el-card) {
@@ -150,23 +178,18 @@ onMounted(async () => {
   align-items: center;
 }
 
-.card-header span {
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
-}
-
 .balance-low {
   color: #f56c6c;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .balance-warning {
   color: #e6a23c;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .balance-normal {
   color: #67c23a;
+  font-weight: 600;
 }
 </style>

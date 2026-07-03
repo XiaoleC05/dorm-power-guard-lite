@@ -6,7 +6,7 @@
     </div>
 
     <el-alert
-      title="保存后系统将自动重启相关服务使配置生效"
+      title="保存后系统将尝试自动重启相关服务；若重启失败会提示手动处理"
       type="info"
       show-icon
       :closable="false"
@@ -79,17 +79,17 @@
     <el-card shadow="hover" class="section">
       <template #header>QQ 机器人</template>
       <el-form label-width="160px">
+        <el-form-item label="机器人 QQ">
+          <el-input model-value="1270667498" disabled />
+        </el-form-item>
         <el-form-item label="启用 QQ 机器人">
           <el-switch v-model="qqBotEnabled" />
         </el-form-item>
         <el-form-item label="API 地址">
           <el-input v-model="form.QQ_BOT_API_URL" />
         </el-form-item>
-        <el-form-item label="群号">
-          <el-input v-model="form.QQ_BOT_GROUP_ID" />
-        </el-form-item>
-        <el-form-item label="用户 QQ">
-          <el-input v-model="form.QQ_BOT_USER_ID" />
+        <el-form-item label="告警群号">
+          <el-input v-model="form.QQ_BOT_GROUP_ID" placeholder="消息仅发送到此群" />
         </el-form-item>
         <el-form-item label="Access Token">
           <el-input v-model="form.QQ_BOT_ACCESS_TOKEN" type="password" show-password />
@@ -103,6 +103,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getSettings, updateSettings } from '../api/admin'
+import { formatApiError } from '../utils/apiError'
 
 const saving = ref(false)
 const form = reactive({
@@ -123,8 +124,7 @@ const form = reactive({
   EMAIL_TO: '',
   QQ_BOT_ENABLED: 'false',
   QQ_BOT_API_URL: 'http://127.0.0.1:8080',
-  QQ_BOT_GROUP_ID: '',
-  QQ_BOT_USER_ID: '714085964',
+  QQ_BOT_GROUP_ID: '6011223303',
   QQ_BOT_ACCESS_TOKEN: ''
 })
 
@@ -145,17 +145,21 @@ const loadSettings = async () => {
 const saveSettings = async () => {
   saving.value = true
   try {
-    await updateSettings({
+    const data = await updateSettings({
       ...form,
       SCHEDULER_INTERVAL_HOURS: String(schedulerHours.value),
       ALERT_COOLDOWN_HOURS: String(alertCooldownHours.value),
       EMAIL_ENABLED: emailEnabled.value ? 'true' : 'false',
       QQ_BOT_ENABLED: qqBotEnabled.value ? 'true' : 'false'
     })
-    ElMessage.success('配置已保存，服务正在重启')
+    if (data.restart_required) {
+      ElMessage.warning('配置已保存，但服务重启失败，请手动执行 systemctl restart dorm-backend')
+    } else {
+      ElMessage.success('配置已保存，相关服务已重启')
+    }
     await loadSettings()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '保存失败')
+    ElMessage.error(formatApiError(error, '保存失败'))
   } finally {
     saving.value = false
   }

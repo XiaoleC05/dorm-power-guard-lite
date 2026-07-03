@@ -2,7 +2,8 @@
 电费数据爬虫模块 - 西华大学一卡通宿舍用电小程序
 
 本模块用于抓取西华大学一卡通系统的宿舍电费数据。
-管理员QQ：714085964
+西华大学一卡通宿舍用电爬虫
+机器人QQ：1270667498
 """
 import requests
 from typing import Optional, Dict

@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.services import CrawlerService, PowerRecordService, AlertRuleService
+from app.services import CrawlerService, PowerRecordService
 from app.config import settings
 import logging
 import requests
@@ -83,7 +83,7 @@ async def manual_crawl(db: Session = Depends(get_db)):
 
 @router.post("/report", summary="发送电费实时报告到QQ群")
 async def send_power_report(db: Session = Depends(get_db)):
-    """按真实流程发送电费报告：使用最新采集记录，只发送空调/照明余额"""
+    """发送电费实时报告到配置的告警群（仅群消息）。"""
     try:
         dorm_number = str(settings.CRAWLER_DORM_NUMBER)
         latest = PowerRecordService.get_latest_record(db, dorm_number)
@@ -93,19 +93,14 @@ async def send_power_report(db: Session = Depends(get_db)):
         if not settings.QQ_BOT_ENABLED or not settings.QQ_BOT_API_URL:
             return {"success": False, "message": "QQ机器人未启用或API地址未配置"}
 
-        rule = AlertRuleService.get_rule(db, dorm_number)
-        receiver = getattr(rule, "qq_receiver_id", None) if rule else None
-        if not receiver:
-            return {"success": False, "message": "未找到QQ接收配置（请在告警规则中填写群号）"}
-
-        receiver = receiver.strip()
-        if receiver.startswith("group:") or receiver.startswith("g:"):
-            receiver = receiver.split(":", 1)[1].strip()
+        group_id = settings.QQ_BOT_GROUP_ID
+        if not group_id or not str(group_id).strip():
+            return {"success": False, "message": "未配置告警群号（请在系统配置中填写 QQ_BOT_GROUP_ID）"}
 
         try:
-            group_id = int(receiver)
+            target_group = int(str(group_id).strip())
         except ValueError:
-            return {"success": False, "message": f"QQ群号配置无效：{receiver}"}
+            return {"success": False, "message": f"告警群号配置无效：{group_id}"}
 
         msg = (
             "【电费实时报告】\n"
@@ -118,7 +113,7 @@ async def send_power_report(db: Session = Depends(get_db)):
 
         resp = requests.post(
             f"{settings.QQ_BOT_API_URL}/api/send_group_msg",
-            json={"group_id": group_id, "message": msg},
+            json={"group_id": target_group, "message": msg},
             timeout=10,
         )
 
@@ -136,19 +131,21 @@ async def send_power_report(db: Session = Depends(get_db)):
 
 @router.get("/qq-config", summary="获取QQ机器人全局配置")
 async def get_qq_config():
-    """获取QQ机器人全局配置（群号和用户QQ号）"""
+    """获取QQ机器人配置（机器人QQ号固定，告警群号可配置）。"""
     return {
+        "bot_id": settings.QQ_BOT_ID,
         "group_id": settings.QQ_BOT_GROUP_ID,
-        "user_id": settings.QQ_BOT_USER_ID,
-        "enabled": settings.QQ_BOT_ENABLED
+        "enabled": settings.QQ_BOT_ENABLED,
     }
 
 
 @router.get("/config", summary="获取系统配置信息")
 async def get_config():
     """获取系统配置信息（宿舍号等）"""
+    dorm_number = settings.CRAWLER_DORM_NUMBER
     return {
-        "dorm_number": settings.CRAWLER_DORM_NUMBER
+        "dorm_number": dorm_number,
+        "configured": bool(dorm_number and str(dorm_number).strip()),
     }
 
 

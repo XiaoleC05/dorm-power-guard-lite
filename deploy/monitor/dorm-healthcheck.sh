@@ -17,8 +17,14 @@ check() {
   fi
 }
 
+check_nonebot() {
+  local body
+  body=$(curl -fsS --max-time 10 http://127.0.0.1:8080/api/get_status) || return 1
+  python3 -c "import json,sys; d=json.loads(sys.argv[1]); sys.exit(0 if d.get('status')=='ok' else 1)" "$body"
+}
+
 check "backend" curl -fsS --max-time 10 http://127.0.0.1:8000/health
-check "nonebot" curl -fsS --max-time 10 http://127.0.0.1:8080/api/get_status
+check "nonebot" check_nonebot
 check "nginx" systemctl is-active --quiet nginx
 
 if [ "$FAIL" -ne 0 ]; then

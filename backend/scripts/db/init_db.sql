@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     email_enabled BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否启用邮件告警，True时当余量低于阈值会发送邮件',
     email_address VARCHAR(255) NULL COMMENT '邮件告警接收邮箱地址，启用邮件告警时必须填写',
     qq_enabled BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否启用QQ告警，True时当余量低于阈值会发送QQ消息',
-    qq_receiver_id VARCHAR(50) NULL COMMENT 'QQ告警接收者ID，可以是QQ号（私聊）或群号（群聊，通常>=1000000000），启用QQ告警时必须填写',
+    qq_receiver_id VARCHAR(50) NULL COMMENT '已废弃，告警群号改由 QQ_BOT_GROUP_ID 配置',
     last_alert_time DATETIME NULL COMMENT '最后告警时间，用于防止频繁告警，记录最近一次成功发送告警的时间',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间，规则创建的时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间，规则最后修改的时间',

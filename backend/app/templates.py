@@ -1,7 +1,7 @@
 """
 邮件通知模板 - 西华大学宿舍电费监控系统
 
-管理员QQ：714085964
+奥泽莉亚工具箱 - 邮件模板
 """
 from datetime import datetime
 from typing import Optional
@@ -185,7 +185,7 @@ def get_email_template(dorm_number: str, category: str, category_name: str,
         <div class="footer">
             <p><strong>西华大学宿舍电费监控系统</strong></p>
             <p>此邮件由系统自动发送，数据来源于西华大学一卡通系统</p>
-            <p>如有疑问，请联系管理员QQ：<strong>714085964</strong></p>
+            <p>如有疑问，请在告警群反馈（群号见系统配置）</p>
             <p style="margin-top: 10px; font-size: 11px; color: #bbb;">本系统仅用于学习和个人使用，请遵守西华大学相关规定</p>
         </div>
     </div>
@@ -252,7 +252,7 @@ def get_email_text_template(dorm_number: str, category: str, category_name: str,
 
 西华大学宿舍电费监控系统
 此邮件由系统自动发送，数据来源于西华大学一卡通系统
-如有疑问，请联系管理员QQ：714085964
+如有疑问，请在告警群反馈（群号见系统配置）
 
 本系统仅用于学习和个人使用，请遵守西华大学相关规定
     """

@@ -3,7 +3,7 @@ Pydantic模型（API请求/响应模型）
 """
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 
 class PowerRecordBase(BaseModel):
@@ -30,6 +30,11 @@ class PowerRecordResponse(PowerRecordBase):
         from_attributes = True
 
 
+class PowerRecordListResponse(BaseModel):
+    items: List[PowerRecordResponse]
+    total: int
+
+
 class AlertRuleBase(BaseModel):
     """告警规则基础模型"""
     dorm_number: str  # 宿舍号（如：320、324），唯一标识一个宿舍的告警规则
@@ -40,8 +45,7 @@ class AlertRuleBase(BaseModel):
     enabled: bool = True  # 是否启用告警规则，False时不会触发任何告警
     email_enabled: bool = False  # 是否启用邮件告警，True时当余量低于阈值会发送邮件
     email_address: Optional[str] = None  # 邮件告警接收邮箱地址，启用邮件告警时必须填写
-    qq_enabled: bool = False  # 是否启用QQ告警，True时当余量低于阈值会发送QQ消息
-    qq_receiver_id: Optional[str] = None  # QQ告警接收者ID，可以是QQ号（私聊）或群号（群聊，通常>=1000000000），启用QQ告警时必须填写
+    qq_enabled: bool = False  # 是否启用QQ告警（群号在系统配置 QQ_BOT_GROUP_ID 中设置）
 
 
 class AlertRuleCreate(AlertRuleBase):
@@ -57,8 +61,7 @@ class AlertRuleUpdate(BaseModel):
     enabled: Optional[bool] = None  # 是否启用告警规则
     email_enabled: Optional[bool] = None  # 是否启用邮件告警
     email_address: Optional[str] = None  # 邮件告警接收邮箱地址，启用邮件告警时必须填写
-    qq_enabled: Optional[bool] = None  # 是否启用QQ告警
-    qq_receiver_id: Optional[str] = None  # QQ告警接收者ID，可以是QQ号（私聊）或群号（群聊），启用QQ告警时必须填写
+    qq_enabled: Optional[bool] = None  # 是否启用QQ告警（群号在系统配置中设置）
 
 
 class AlertRuleResponse(AlertRuleBase):

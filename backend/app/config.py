@@ -1,10 +1,6 @@
 """
-配置文件 - 西华大学宿舍电费监控系统
-
-本项目针对西华大学一卡通宿舍用电小程序。
-管理员QQ：714085964
-"""
-from pydantic_settings import BaseSettings, SettingsConfigDict
+奥泽莉亚工具箱 - 配置文件
+"""from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 from pydantic import field_validator
 
@@ -61,14 +57,12 @@ class Settings(BaseSettings):
     EMAIL_FROM: Optional[str] = None
     EMAIL_TO: Optional[str] = None
     
-    # QQ机器人配置（NoneBot）
+    # QQ机器人（NoneBot + NapCat，仅群消息）
     QQ_BOT_ENABLED: bool = False
     QQ_BOT_API_URL: Optional[str] = None
-    QQ_BOT_GROUP_ID: Optional[str] = None
-    QQ_BOT_USER_ID: Optional[str] = None
-    QQ_BOT_SENDER_ID: Optional[str] = None
-    QQ_BOT_ACCESS_TOKEN: Optional[str] = None
-    
+    QQ_BOT_ID: str = "1270667498"  # 机器人登录QQ号，固定不可改
+    QQ_BOT_GROUP_ID: Optional[str] = "6011223303"  # 告警消息发送目标群号，可修改
+    QQ_BOT_ACCESS_TOKEN: Optional[str] = None    
     # QQ直推配置（QMsg）
     QQ_NOTIFY_API_KEY: Optional[str] = None
 

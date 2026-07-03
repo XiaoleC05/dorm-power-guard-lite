@@ -6,9 +6,9 @@ export const createRecord = (data) => api.post('/power/records', data)
 // 获取最新记录
 export const getLatestRecord = (dormNumber) => api.get(`/power/records/${dormNumber}/latest`)
 
-// 获取记录列表
-export const getRecords = (dormNumber, limit = 100) => 
-  api.get(`/power/records/${dormNumber}`, { params: { limit } })
+// 获取记录列表（分页）
+export const getRecords = (dormNumber, limit = 100, offset = 0) => 
+  api.get(`/power/records/${dormNumber}`, { params: { limit, offset } })
 
 // 按日期范围获取记录
 export const getRecordsByRange = (dormNumber, startDate, endDate) => {

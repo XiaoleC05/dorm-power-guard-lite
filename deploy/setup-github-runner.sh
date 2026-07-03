@@ -43,10 +43,12 @@ if [ ! -f "$RUNNER_DIR/config.sh" ]; then
 fi
 
 cat > "$SUDOERS_FILE" <<EOF
-# 允许自托管 Runner 执行部署（脚本在 /tmp/dormguard-release 解压目录）
+# DormGuard 自托管 Runner 部署权限（固定路径 + 临时解压目录）
+$RUNNER_USER ALL=(ALL) NOPASSWD: /usr/bin/bash /opt/DormGuard/deploy/ci-deploy.sh *
+$RUNNER_USER ALL=(ALL) NOPASSWD: /usr/bin/bash /opt/DormGuard/deploy/apply-release.sh *
 $RUNNER_USER ALL=(ALL) NOPASSWD: /usr/bin/bash /tmp/dormguard-release/deploy/apply-release.sh *
-$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/DormGuard/deploy/apply-release.sh *
 $RUNNER_USER ALL=(ALL) NOPASSWD: /opt/DormGuard/deploy/fix-napcat.sh
+$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/dorm-power-guard-lite/deploy/fix-napcat.sh
 EOF
 chmod 440 "$SUDOERS_FILE"
 visudo -cf "$SUDOERS_FILE"

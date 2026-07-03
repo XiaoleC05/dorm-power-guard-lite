@@ -37,6 +37,7 @@ jobs:
             backend/ release/backend/
           rsync -a --delete frontend/dist/ release/frontend-dist/
           rsync -a deploy/ release/deploy/
+          chmod +x release/deploy/*.sh release/deploy/monitor/*.sh
           tar czf dormguard-release.tar.gz -C release .
 
       - name: Upload release artifact
@@ -58,8 +59,20 @@ jobs:
       - name: Apply release on server
         run: |
           set -euo pipefail
-          rm -rf /tmp/dormguard-release
-          mkdir -p /tmp/dormguard-release
-          tar xzf dormguard-release.tar.gz -C /tmp/dormguard-release
-          sudo bash /tmp/dormguard-release/deploy/apply-release.sh /tmp/dormguard-release
-          rm -rf /tmp/dormguard-release dormguard-release.tar.gz
+          TARBALL="${GITHUB_WORKSPACE}/dormguard-release.tar.gz"
+          if [ ! -f "$TARBALL" ]; then
+            echo "错误：未找到 $TARBALL" >&2
+            ls -la "${GITHUB_WORKSPACE}" >&2
+            exit 1
+          fi
+          CI_SCRIPT="/opt/DormGuard/deploy/ci-deploy.sh"
+          if [ ! -f "$CI_SCRIPT" ]; then
+            WORK="/tmp/dormguard-release"
+            rm -rf "$WORK"
+            mkdir -p "$WORK"
+            tar xzf "$TARBALL" -C "$WORK"
+            sudo /usr/bin/bash "$WORK/deploy/apply-release.sh" "$WORK"
+            rm -rf "$WORK" || true
+          else
+            sudo /usr/bin/bash "$CI_SCRIPT" "$TARBALL"
+          fi

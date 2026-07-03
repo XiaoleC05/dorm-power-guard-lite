@@ -12,12 +12,6 @@ from app.env_manager import mask_env_values, read_env_values, write_env_values
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-QQ_RELATED_KEYS: Set[str] = {
-    "QQ_BOT_ENABLED",
-    "QQ_BOT_API_URL",
-    "QQ_BOT_GROUP_ID",
-}
-
 
 class SettingsResponse(BaseModel):
     settings: Dict[str, str]
@@ -30,8 +24,7 @@ class SettingsUpdateRequest(BaseModel):
 
 def _restart_services(changed_keys: Set[str]) -> bool:
     services = ["dorm-backend"]
-    if changed_keys & QQ_RELATED_KEYS:
-        services.append("dorm-nonebot")
+    # QQ 群号等配置仅后端读取，修改时不必重启 NoneBot，避免打断 NapCat 连接
     try:
         for service in services:
             subprocess.run(

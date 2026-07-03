@@ -7,5 +7,5 @@ services:
     environment:
       - NAPCAT_QUICK_ACCOUNT=${NAPCAT_QUICK_ACCOUNT:-1270667498}
     volumes:
-      - /opt/napcat/QQ:/app/.config/QQ
+      - /opt/napcat/QQ:/root/.config/QQ
       - /opt/napcat/config:/app/napcat/config

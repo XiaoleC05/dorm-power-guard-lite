@@ -47,7 +47,7 @@ else
     --restart unless-stopped \
     --network host \
     -e NAPCAT_QUICK_ACCOUNT="$QQ_ACCOUNT" \
-    -v /opt/napcat/QQ:/app/.config/QQ \
+    -v /opt/napcat/QQ:/root/.config/QQ \
     -v /opt/napcat/config:/app/napcat/config \
     ghcr.io/napneko/nodenapcat:latest
 fi

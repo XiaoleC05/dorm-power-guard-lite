@@ -589,9 +589,12 @@ const loadChartData = async () => {
       })
       
       await nextTick()
-      if (chartContainer.value && monthlyRecords.length > 0) {
-        initMonthlyChart(monthlyRecords)
+      if (monthlyRecords.length > 0) {
         hasChartData.value = true
+        await nextTick()
+        if (chartContainer.value) {
+          initMonthlyChart(monthlyRecords)
+        }
       } else {
         hasChartData.value = false
       }

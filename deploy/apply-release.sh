@@ -44,6 +44,8 @@ cp "$APP_DIR/deploy/nginx/oxelia51.com.conf" /etc/nginx/sites-available/oxelia51
 ln -sf /etc/nginx/sites-available/oxelia51.com /etc/nginx/sites-enabled/oxelia51.com
 rm -f /etc/nginx/sites-enabled/masterc.cn
 
+systemctl stop dorm-backend dorm-nonebot 2>/dev/null || true
+systemctl stop dorm-backend dorm-nonebot 2>/dev/null || true
 systemctl disable dorm-backend dorm-nonebot dorm-healthcheck.timer 2>/dev/null || true
 rm -f /etc/systemd/system/dorm-backend.service /etc/systemd/system/dorm-nonebot.service
 rm -f /etc/systemd/system/dorm-healthcheck.service /etc/systemd/system/dorm-healthcheck.timer

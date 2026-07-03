@@ -43,8 +43,10 @@ if [ ! -f "$RUNNER_DIR/config.sh" ]; then
 fi
 
 cat > "$SUDOERS_FILE" <<EOF
-# 允许自托管 Runner 执行部署脚本（需要 systemctl / nginx 等）
-$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/dorm-power-guard-lite/deploy/apply-release.sh, /opt/dorm-power-guard-lite/deploy/fix-napcat.sh, /bin/systemctl, /usr/sbin/nginx, /bin/cp, /bin/ln, /usr/bin/rsync
+# 允许自托管 Runner 执行部署（脚本在 /tmp/dorm-release 解压目录）
+$RUNNER_USER ALL=(ALL) NOPASSWD: /usr/bin/bash /tmp/dorm-release/deploy/apply-release.sh *
+$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/dorm-power-guard-lite/deploy/apply-release.sh *
+$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/dorm-power-guard-lite/deploy/fix-napcat.sh
 EOF
 chmod 440 "$SUDOERS_FILE"
 visudo -cf "$SUDOERS_FILE"

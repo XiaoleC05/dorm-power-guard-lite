@@ -1,0 +1,6 @@
+[Unit]
+Description=DormGuard health check
+
+[Service]
+Type=oneshot
+ExecStart=/opt/DormGuard/deploy/monitor/dormguard-healthcheck.sh

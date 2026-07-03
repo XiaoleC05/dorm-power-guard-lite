@@ -1,4 +1,4 @@
-name: Deploy to oxelia51.com
+name: Deploy DormGuard
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-oxelia51
+  group: deploy-dormguard
   cancel-in-progress: false
 
 jobs:
@@ -37,13 +37,13 @@ jobs:
             backend/ release/backend/
           rsync -a --delete frontend/dist/ release/frontend-dist/
           rsync -a deploy/ release/deploy/
-          tar czf dorm-release.tar.gz -C release .
+          tar czf dormguard-release.tar.gz -C release .
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dorm-release
-          path: dorm-release.tar.gz
+          name: dormguard-release
+          path: dormguard-release.tar.gz
           retention-days: 1
 
   deploy:
@@ -53,13 +53,13 @@ jobs:
       - name: Download release artifact
         uses: actions/download-artifact@v4
         with:
-          name: dorm-release
+          name: dormguard-release
 
       - name: Apply release on server
         run: |
           set -euo pipefail
-          rm -rf /tmp/dorm-release
-          mkdir -p /tmp/dorm-release
-          tar xzf dorm-release.tar.gz -C /tmp/dorm-release
-          sudo bash /tmp/dorm-release/deploy/apply-release.sh /tmp/dorm-release
-          rm -rf /tmp/dorm-release dorm-release.tar.gz
+          rm -rf /tmp/dormguard-release
+          mkdir -p /tmp/dormguard-release
+          tar xzf dormguard-release.tar.gz -C /tmp/dormguard-release
+          sudo bash /tmp/dormguard-release/deploy/apply-release.sh /tmp/dormguard-release
+          rm -rf /tmp/dormguard-release dormguard-release.tar.gz

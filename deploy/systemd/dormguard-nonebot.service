@@ -1,0 +1,17 @@
+[Unit]
+Description=DormGuard NoneBot QQ Bot
+After=network.target dormguard-backend.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/DormGuard/backend/nonebot_bot
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/DormGuard/backend/.env
+ExecStart=/opt/DormGuard/backend/venv/bin/python bot.py
+Restart=always
+RestartSec=5
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

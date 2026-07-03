@@ -1,7 +1,7 @@
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS dorm_power_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS dorm_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE dorm_power_guard;
+USE dorm_guard;
 
 -- 注意：表结构会由SQLAlchemy自动创建，此文件仅供参考
 -- 如果需要手动创建，可以使用以下SQL

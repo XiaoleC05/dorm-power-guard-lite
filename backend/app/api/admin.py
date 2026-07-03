@@ -23,7 +23,7 @@ class SettingsUpdateRequest(BaseModel):
 
 
 def _restart_services(changed_keys: Set[str]) -> bool:
-    services = ["dorm-backend"]
+    services = ["dormguard-backend"]
     # QQ 群号等配置仅后端读取，修改时不必重启 NoneBot，避免打断 NapCat 连接
     try:
         for service in services:

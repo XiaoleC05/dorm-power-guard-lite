@@ -1,6 +1,0 @@
-[Unit]
-Description=Dorm Power Guard health check
-
-[Service]
-Type=oneshot
-ExecStart=/opt/dorm-power-guard-lite/deploy/monitor/dorm-healthcheck.sh

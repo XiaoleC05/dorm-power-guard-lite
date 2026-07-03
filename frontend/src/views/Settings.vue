@@ -129,7 +129,7 @@ const saveSettings = async () => {
       QQ_BOT_ENABLED: qqBotEnabled.value ? 'true' : 'false'
     })
     if (data.restart_required) {
-      ElMessage.warning('配置已保存，但服务重启失败，请手动执行 systemctl restart dorm-backend')
+      ElMessage.warning('配置已保存，但服务重启失败，请手动执行 systemctl restart dormguard-backend')
     } else {
       ElMessage.success('配置已保存，相关服务已重启')
     }

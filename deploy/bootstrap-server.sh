@@ -2,8 +2,8 @@
 # 服务器首次规范化脚本（仅需执行一次）
 set -euo pipefail
 
-APP_DIR="/opt/dorm-power-guard-lite"
-REPO_URL="https://github.com/XiaoleC05/dorm-power-guard-lite.git"
+APP_DIR="/opt/DormGuard"
+REPO_URL="https://github.com/XiaoleC05/DormGuard.git"
 
 echo "[1/8] 安装基础依赖..."
 export DEBIAN_FRONTEND=noninteractive

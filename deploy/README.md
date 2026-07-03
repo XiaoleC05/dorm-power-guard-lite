@@ -3,7 +3,7 @@
 ## 服务器目录
 
 ```text
-/opt/dorm-power-guard-lite/
+/opt/DormGuard/
 ├── backend/          # FastAPI + NoneBot
 │   ├── .env          # 仅保留在服务器，不被 CI 覆盖
 │   └── venv/
@@ -15,7 +15,7 @@
 
 ```bash
 ssh <your-server>
-bash /opt/dorm-power-guard-lite/deploy/bootstrap-server.sh
+bash /opt/DormGuard/deploy/bootstrap-server.sh
 ```
 
 在 `backend/.env` 中配置（勿提交到 Git）：
@@ -28,7 +28,7 @@ ADMIN_JWT_SECRET=<至少32位随机字符串>
 QQ_BOT_API_TOKEN=<至少32位随机字符串>
 ```
 
-修改密码或 JWT 后执行：`systemctl restart dorm-backend dorm-nonebot`
+修改密码或 JWT 后执行：`systemctl restart dormguard-backend dormguard-nonebot`
 
 ## GitHub Secrets
 

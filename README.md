@@ -1,4 +1,4 @@
-# DormPowerGuard-Lite
+# DormGuard
 
 西华大学宿舍电费监控系统 - MVP快速验证方案
 
@@ -101,7 +101,7 @@
 ## 项目结构
 
 ```
-dorm-power-guard-lite/
+DormGuard/
 ├── backend/                 # 后端代码
 │   ├── app/
 │   │   ├── api/            # API路由
@@ -165,8 +165,8 @@ dorm-power-guard-lite/
 ### 2. 克隆项目
 
 ```bash
-git clone https://gitee.com/ak-god/dorm-power-guard-lite.git
-cd dorm-power-guard-lite
+git clone https://gitee.com/ak-god/DormGuard.git
+cd DormGuard
 ```
 
 ### 3. 后端部署
@@ -193,7 +193,7 @@ mysql -u root -p
 ```
 
 ```sql
-CREATE DATABASE dorm_power_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE dorm_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 EXIT;
 ```
 
@@ -328,7 +328,7 @@ DB_HOST=localhost
 DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your_password
-DB_NAME=dorm_power_guard
+DB_NAME=dorm_guard
 ```
 
 ### 2. 爬虫配置（西华大学一卡通）
@@ -823,14 +823,14 @@ apt install -y python3 python3-pip python3-venv git mysql-server nginx nodejs np
 
 ```bash
 cd /opt
-git clone https://gitee.com/ak-god/dorm-power-guard-lite.git
-cd dorm-power-guard-lite
+git clone https://gitee.com/ak-god/DormGuard.git
+cd DormGuard
 ```
 
 **后端：**
 
 ```bash
-cd /opt/dorm-power-guard-lite/backend
+cd /opt/DormGuard/backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -839,7 +839,7 @@ pip install -r requirements.txt
 **前端（构建静态文件）：**
 
 ```bash
-cd /opt/dorm-power-guard-lite/frontend
+cd /opt/DormGuard/frontend
 npm install
 npm run build
 ```
@@ -864,9 +864,9 @@ sudo mysql -u root -p
 在 MySQL 中执行：
 
 ```sql
-CREATE DATABASE dorm_power_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE dorm_guard CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'dorm_guard'@'localhost' IDENTIFIED BY '你的密码';
-GRANT ALL ON dorm_power_guard.* TO 'dorm_guard'@'localhost';
+GRANT ALL ON dorm_guard.* TO 'dorm_guard'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
@@ -874,20 +874,20 @@ EXIT;
 3. **初始化表结构**
 
 ```bash
-mysql -u dorm_guard -p dorm_power_guard < /opt/dorm-power-guard-lite/backend/scripts/db/init_db.sql
+mysql -u dorm_guard -p dorm_guard < /opt/DormGuard/backend/scripts/db/init_db.sql
 ```
 
 #### 五、配置后端环境变量
 
 ```bash
-cd /opt/dorm-power-guard-lite/backend
+cd /opt/DormGuard/backend
 cp .env.example .env
 nano .env
 ```
 
 必填项示例：
 
-- `DB_HOST=localhost`、`DB_PORT=3306`、`DB_USER=dorm_guard`、`DB_PASSWORD=你的密码`、`DB_NAME=dorm_power_guard`
+- `DB_HOST=localhost`、`DB_PORT=3306`、`DB_USER=dorm_guard`、`DB_PASSWORD=你的密码`、`DB_NAME=dorm_guard`
 - `CRAWLER_OPENID`、`CRAWLER_JSESSIONID`（抓包获取）
 - `CRAWLER_DORM_NUMBER`、`CRAWLER_ROOM_ID`（或通过告警规则中的 room_id 配置）
 - 邮件/QQ 告警按需配置（见上文「详细配置」）
@@ -899,7 +899,7 @@ nano .env
 创建服务文件：
 
 ```bash
-sudo nano /etc/systemd/system/dorm-power-guard.service
+sudo nano /etc/systemd/system/dormguard-backend.service
 ```
 
 内容（路径按实际修改）：
@@ -912,9 +912,9 @@ After=network.target mysql.service
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/dorm-power-guard-lite/backend
-Environment="PATH=/opt/dorm-power-guard-lite/backend/venv/bin:/usr/bin:/usr/local/bin"
-ExecStart=/opt/dorm-power-guard-lite/backend/venv/bin/python run.py
+WorkingDirectory=/opt/DormGuard/backend
+Environment="PATH=/opt/DormGuard/backend/venv/bin:/usr/bin:/usr/local/bin"
+ExecStart=/opt/DormGuard/backend/venv/bin/python run.py
 Restart=always
 RestartSec=10
 
@@ -922,15 +922,15 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-若未使用 venv，则 `ExecStart` 改为：`/usr/bin/python3 /opt/dorm-power-guard-lite/backend/run.py`。
+若未使用 venv，则 `ExecStart` 改为：`/usr/bin/python3 /opt/DormGuard/backend/run.py`。
 
 启动并开机自启：
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable dorm-power-guard
-sudo systemctl start dorm-power-guard
-sudo systemctl status dorm-power-guard
+sudo systemctl enable dormguard-backend
+sudo systemctl start dormguard-backend
+sudo systemctl status dormguard-backend
 ```
 
 #### 七、Nginx 反向代理
@@ -938,7 +938,7 @@ sudo systemctl status dorm-power-guard
 创建站点配置：
 
 ```bash
-sudo nano /etc/nginx/sites-available/dorm-power-guard
+sudo nano /etc/nginx/sites-available/oxelia51.com
 ```
 
 内容（将 `your_domain.com` 改为你的域名或服务器 IP）：
@@ -950,7 +950,7 @@ server {
 
     # 前端静态文件
     location / {
-        root /opt/dorm-power-guard-lite/frontend/dist;
+        root /opt/DormGuard/frontend/dist;
         try_files $uri $uri/ /index.html;
     }
 
@@ -968,7 +968,7 @@ server {
 启用站点并重启 Nginx：
 
 ```bash
-sudo ln -sf /etc/nginx/sites-available/dorm-power-guard /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/oxelia51.com /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
@@ -1005,7 +1005,7 @@ sudo ufw enable
 **1. 安装 NoneBot 依赖并配置**
 
 ```bash
-cd /opt/dorm-power-guard-lite/backend/nonebot_bot
+cd /opt/DormGuard/backend/nonebot_bot
 python3 -m venv venv
 source venv/bin/activate
 pip install nonebot2 nonebot-adapter-onebot httpx
@@ -1018,7 +1018,7 @@ pip install nonebot2 nonebot-adapter-onebot httpx
 **2. 用 systemd 管理 NoneBot**
 
 ```bash
-sudo nano /etc/systemd/system/dorm-nonebot.service
+sudo nano /etc/systemd/system/dormguard-nonebot.service
 ```
 
 内容示例：
@@ -1031,9 +1031,9 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/dorm-power-guard-lite/backend/nonebot_bot
-Environment="PATH=/opt/dorm-power-guard-lite/backend/nonebot_bot/venv/bin:/usr/bin"
-ExecStart=/opt/dorm-power-guard-lite/backend/nonebot_bot/venv/bin/python bot.py
+WorkingDirectory=/opt/DormGuard/backend/nonebot_bot
+Environment="PATH=/opt/DormGuard/backend/nonebot_bot/venv/bin:/usr/bin"
+ExecStart=/opt/DormGuard/backend/nonebot_bot/venv/bin/python bot.py
 Restart=always
 RestartSec=10
 
@@ -1043,9 +1043,9 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable dorm-nonebot
-sudo systemctl start dorm-nonebot
-sudo systemctl status dorm-nonebot
+sudo systemctl enable dormguard-nonebot
+sudo systemctl start dormguard-nonebot
+sudo systemctl status dormguard-nonebot
 ```
 
 **3. 用 Docker 部署 NapCatQQ（推荐）**
@@ -1107,8 +1107,8 @@ ssh -L 6099:127.0.0.1:6099 root@你的服务器IP
 **7. 更新代码后重启**
 
 ```bash
-sudo systemctl restart dorm-power-guard
-sudo systemctl restart dorm-nonebot
+sudo systemctl restart dormguard-backend
+sudo systemctl restart dormguard-nonebot
 sudo docker restart napcat
 ```
 
@@ -1125,7 +1125,7 @@ sudo docker restart napcat
 1. **本地修改代码**
 2. **提交并推送**：`git push`
 3. **服务器拉取**：`git pull`
-4. **重启服务**：`sudo systemctl restart dorm-power-guard`
+4. **重启服务**：`sudo systemctl restart dormguard-backend`
 
 整个过程通常不到1分钟。
 
@@ -1134,7 +1134,7 @@ sudo docker restart napcat
 **在本地（您的电脑）**：
 
 ```bash
-cd c:\GitCloneRepository\dorm-power-guard-lite
+cd c:\GitCloneRepository\DormGuard
 git add .
 git commit -m "描述你的修改"
 git push origin master
@@ -1143,9 +1143,9 @@ git push origin master
 **在服务器上**：
 
 ```bash
-cd /opt/dorm-power-guard-lite
+cd /opt/DormGuard
 git pull origin master
-sudo systemctl restart dorm-power-guard
+sudo systemctl restart dormguard-backend
 ```
 
 #### 自动化更新脚本
@@ -1154,11 +1154,11 @@ sudo systemctl restart dorm-power-guard
 
 ```bash
 #!/bin/bash
-cd /opt/dorm-power-guard-lite
+cd /opt/DormGuard
 git pull origin master
 cd backend
 pip3 install -r requirements.txt
-sudo systemctl restart dorm-power-guard
+sudo systemctl restart dormguard-backend
 ```
 
 使用：
@@ -1226,10 +1226,10 @@ chmod +x backend/update.sh
 **A**: 
 ```bash
 # 备份数据库
-mysqldump -u root -p dorm_power_guard > backup.sql
+mysqldump -u root -p dorm_guard > backup.sql
 
 # 恢复数据库
-mysql -u root -p dorm_power_guard < backup.sql
+mysql -u root -p dorm_guard < backup.sql
 ```
 
 ### Q9: 程序无法启动怎么办？
@@ -1245,7 +1245,7 @@ mysql -u root -p dorm_power_guard < backup.sql
 **A**: 
 ```bash
 # systemd服务日志
-sudo journalctl -u dorm-power-guard -f
+sudo journalctl -u dormguard-backend -f
 
 # 应用日志（如果配置了日志文件）
 tail -f backend/logs/app.log

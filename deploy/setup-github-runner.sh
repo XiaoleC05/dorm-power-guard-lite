@@ -4,14 +4,14 @@ set -euo pipefail
 
 RUNNER_USER="github-runner"
 RUNNER_DIR="/opt/actions-runner"
-REPO_URL="https://github.com/XiaoleC05/dorm-power-guard-lite"
+REPO_URL="https://github.com/XiaoleC05/DormGuard"
 SUDOERS_FILE="/etc/sudoers.d/github-runner"
 
 if [ -z "${1:-}" ]; then
   echo "用法: sudo bash $0 REGISTRATION_TOKEN"
   echo ""
   echo "获取 Token："
-  echo "https://github.com/XiaoleC05/dorm-power-guard-lite/settings/actions/runners/new"
+  echo "https://github.com/XiaoleC05/DormGuard/settings/actions/runners/new"
   echo "复制 --token 后面的字符串，不要加尖括号"
   exit 1
 fi
@@ -43,10 +43,10 @@ if [ ! -f "$RUNNER_DIR/config.sh" ]; then
 fi
 
 cat > "$SUDOERS_FILE" <<EOF
-# 允许自托管 Runner 执行部署（脚本在 /tmp/dorm-release 解压目录）
-$RUNNER_USER ALL=(ALL) NOPASSWD: /usr/bin/bash /tmp/dorm-release/deploy/apply-release.sh *
-$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/dorm-power-guard-lite/deploy/apply-release.sh *
-$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/dorm-power-guard-lite/deploy/fix-napcat.sh
+# 允许自托管 Runner 执行部署（脚本在 /tmp/dormguard-release 解压目录）
+$RUNNER_USER ALL=(ALL) NOPASSWD: /usr/bin/bash /tmp/dormguard-release/deploy/apply-release.sh *
+$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/DormGuard/deploy/apply-release.sh *
+$RUNNER_USER ALL=(ALL) NOPASSWD: /opt/DormGuard/deploy/fix-napcat.sh
 EOF
 chmod 440 "$SUDOERS_FILE"
 visudo -cf "$SUDOERS_FILE"
@@ -59,10 +59,10 @@ if [ -f "$RUNNER_DIR/.runner" ]; then
   exit 0
 fi
 
-sudo -u "$RUNNER_USER" bash -lc "cd '$RUNNER_DIR' && ./config.sh --url '$REPO_URL' --token '$TOKEN' --name oxelia51-ecs --unattended --replace"
+sudo -u "$RUNNER_USER" bash -lc "cd '$RUNNER_DIR' && ./config.sh --url '$REPO_URL' --token '$TOKEN' --name dormguard-ecs --unattended --replace"
 (cd "$RUNNER_DIR" && ./svc.sh install "$RUNNER_USER")
 (cd "$RUNNER_DIR" && ./svc.sh start)
 (cd "$RUNNER_DIR" && ./svc.sh status)
 
 echo "====== GitHub Actions 自托管 Runner 已启动 ======"
-echo "在仓库 Actions 页应能看到 oxelia51-ecs (Idle)"
+echo "在仓库 Actions 页应能看到 dormguard-ecs (Idle)"

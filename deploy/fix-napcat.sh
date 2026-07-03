@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NB_DIR="/opt/dorm-power-guard-lite/backend/nonebot_bot"
+NB_DIR="/opt/DormGuard/backend/nonebot_bot"
 WS_URL="ws://127.0.0.1:8080/onebot/v11/ws"
-COMPOSE_FILE="/opt/dorm-power-guard-lite/deploy/docker/napcat-compose.yml"
+COMPOSE_FILE="/opt/DormGuard/deploy/docker/napcat-compose.yml"
 QQ_ACCOUNT="${QQ_BOT_ACCOUNT:-1270667498}"
 
 echo "[1] NoneBot .env (仅本机监听)"
@@ -14,7 +14,7 @@ PORT=8080
 EOF
 
 echo "[2] Restart NoneBot"
-systemctl restart dorm-nonebot
+systemctl restart dormguard-nonebot
 sleep 3
 
 echo "[3] Update NapCat onebot configs -> $WS_URL"
@@ -56,7 +56,7 @@ fi
 sleep 12
 
 echo "[5] Status"
-ENV_FILE="/opt/dorm-power-guard-lite/backend/.env"
+ENV_FILE="/opt/DormGuard/backend/.env"
 BOT_TOKEN=""
 if [ -f "$ENV_FILE" ]; then
   BOT_TOKEN=$(grep -E '^QQ_BOT_API_TOKEN=' "$ENV_FILE" | cut -d= -f2- | tr -d '\r' || true)

@@ -1,5 +1,5 @@
 """
-奥泽莉亚工具箱 - 配置文件
+DormGuard - 配置文件
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DB_PORT: int = 3306
     DB_USER: str = "root"
     DB_PASSWORD: str = ""
-    DB_NAME: str = "dorm_power_guard"
+    DB_NAME: str = "dorm_guard"
     
     # 爬虫配置
     CRAWLER_BASE_URL: Optional[str] = None

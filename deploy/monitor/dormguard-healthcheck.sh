@@ -2,7 +2,7 @@
 # 健康检查：后端、NoneBot、Nginx
 set -euo pipefail
 
-LOG_TAG="dorm-healthcheck"
+LOG_TAG="dormguard-healthcheck"
 FAIL=0
 MSG=""
 

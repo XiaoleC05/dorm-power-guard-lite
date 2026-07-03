@@ -1,8 +1,8 @@
 <template>
   <div class="login-page">
     <el-card class="login-card" shadow="hover">
-      <h2>奥泽莉亚工具箱</h2>
-      <p class="subtitle">oxelia51.com · 宿舍电费监控</p>
+      <h2>DormGuard</h2>
+      <p class="subtitle">DormGuard · 宿舍电费监控</p>
       <el-form @submit.prevent="handleLogin">
         <el-form-item label="用户名">
           <el-input v-model="username" autocomplete="username" />

@@ -1,5 +1,5 @@
 [project]
-name = "dorm-power-guard-bot"
+name = "dormguard-bot"
 version = "1.0.0"
 description = "西华大学电费监控系统 QQ机器人"
 requires-python = ">=3.8"

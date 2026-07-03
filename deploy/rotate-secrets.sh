@@ -2,7 +2,7 @@
 # 在服务器上轮换管理密码、JWT 密钥、NoneBot API Token
 set -euo pipefail
 
-ENV_FILE="${1:-/opt/dorm-power-guard-lite/backend/.env}"
+ENV_FILE="${1:-/opt/DormGuard/backend/.env}"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "找不到 $ENV_FILE"
@@ -30,9 +30,9 @@ upsert ADMIN_PASSWORD "$ADMIN_PASSWORD"
 upsert ADMIN_JWT_SECRET "$ADMIN_JWT_SECRET"
 upsert QQ_BOT_API_TOKEN "$QQ_BOT_API_TOKEN"
 
-cp /opt/dorm-power-guard-lite/deploy/systemd/dorm-nonebot.service /etc/systemd/system/ 2>/dev/null || true
+cp /opt/DormGuard/deploy/systemd/dormguard-nonebot.service /etc/systemd/system/ 2>/dev/null || true
 systemctl daemon-reload
-systemctl restart dorm-backend dorm-nonebot
+systemctl restart dormguard-backend dormguard-nonebot
 
 echo "=== 已轮换密钥并重启服务 ==="
 echo "ADMIN_USERNAME=root"

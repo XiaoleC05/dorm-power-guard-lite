@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     ADMIN_JWT_SECRET: str = ""
     ADMIN_TOKEN_EXPIRE_HOURS: int = 168
 
+    # Oxelia51 平台网关模式（ADR-007）；现网默认 false
+    OXELIA_GATEWAY_MODE: bool = False
+    OXELIA_GATEWAY_SECRET: str = ""
+
     @field_validator("DEFAULT_ALERT_THRESHOLD", mode="before")
     @classmethod
     def handle_empty_threshold(cls, v):

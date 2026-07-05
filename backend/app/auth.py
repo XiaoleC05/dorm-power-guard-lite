@@ -1,4 +1,4 @@
-"""单用户鉴权（root），无注册、无改密。"""
+"""单用户鉴权（root），无注册、无改密；支持 Oxelia51 网关模式（ADR-007）。"""
 import base64
 import hashlib
 import hmac
@@ -7,12 +7,14 @@ import secrets
 import time
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import settings
 
 _bearer = HTTPBearer(auto_error=False)
+
+_GATEWAY_TRUSTED_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 # 可配置的 .env 键（供管理页读写）
 MANAGEABLE_ENV_KEYS = [
@@ -79,9 +81,38 @@ def verify_password(username: str, password: str) -> bool:
     return secrets.compare_digest(password, settings.ADMIN_PASSWORD)
 
 
+def _gateway_username(request: Request) -> Optional[str]:
+    """平台网关 loopback 请求：信任 X-Oxelia51-* 头，跳过 DormGuard JWT。"""
+    if not settings.OXELIA_GATEWAY_MODE:
+        return None
+
+    client_host = request.client.host if request.client else ""
+    if client_host not in _GATEWAY_TRUSTED_HOSTS:
+        return None
+
+    user_id = request.headers.get("X-Oxelia51-User-Id", "").strip()
+    username = request.headers.get("X-Oxelia51-Username", "").strip()
+    role = request.headers.get("X-Oxelia51-Role", "").strip()
+    if not user_id or not username or role not in ("admin", "user"):
+        return None
+
+    secret = settings.OXELIA_GATEWAY_SECRET.strip()
+    if secret:
+        got = request.headers.get("X-Oxelia51-Gateway-Secret", "")
+        if not got or not secrets.compare_digest(got, secret):
+            return None
+
+    return username
+
+
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> str:
+    gateway_user = _gateway_username(request)
+    if gateway_user:
+        return gateway_user
+
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

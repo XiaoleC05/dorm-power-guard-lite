@@ -1,0 +1,8 @@
+{
+  "slug": "dormguard",
+  "name": "DormGuard",
+  "description": "西华大学宿舍电费余额监控",
+  "online_capable": true,
+  "github_repo": "XiaoleC05/DormGuard",
+  "release_url": "https://github.com/XiaoleC05/DormGuard/releases"
+}

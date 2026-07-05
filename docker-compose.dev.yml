@@ -1,0 +1,16 @@
+# DormGuard 本地开发 — 仅 MySQL，不影响现网 deploy/
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: dev_local
+      MYSQL_DATABASE: dorm_guard
+    volumes:
+      - dg_mysql_dev:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+volumes:
+  dg_mysql_dev:

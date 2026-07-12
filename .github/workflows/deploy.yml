@@ -1,4 +1,4 @@
-name: Deploy DormGuard
+name: Build and Deploy DormGuard
 
 on:
   push:
@@ -6,73 +6,56 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-dormguard
+  group: deploy-${{ github.ref }}
   cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   build:
+    name: Build & Push to release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-go@v5
         with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          go-version: '1.22'
+          cache-dependency-path: go-backend/go.sum
 
-      - name: Build frontend
+      - name: Go vet
+        working-directory: go-backend
+        run: go vet ./...
+
+      - name: Go test
+        working-directory: go-backend
+        run: go test ./...
+
+      - name: Cross-compile (linux/amd64)
+        working-directory: go-backend
         run: |
-          cd frontend
-          npm ci
-          npm run build
+          mkdir -p ../release
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o ../release/dormguard-server ./cmd/server
+          ls -lh ../release/dormguard-server
 
-      - name: Pack release bundle
-        run: |
-          mkdir -p release/backend release/frontend-dist release/deploy
-          rsync -a --delete \
-            --exclude venv \
-            --exclude __pycache__ \
-            --exclude .env \
-            backend/ release/backend/
-          rsync -a --delete frontend/dist/ release/frontend-dist/
-          rsync -a deploy/ release/deploy/
-          chmod +x release/deploy/*.sh release/deploy/monitor/*.sh
-          tar czf dormguard-release.tar.gz -C release .
+      - name: Package release tarball
+        run: tar czf dormguard-release.tar.gz -C release .
 
-      - name: Upload release artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dormguard-release
-          path: dormguard-release.tar.gz
-          retention-days: 1
-
-  deploy:
-    needs: build
-    runs-on: self-hosted
-    steps:
-      - name: Download release artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dormguard-release
-
-      - name: Apply release on server
+      - name: Push tarball to release branch
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TARBALL="${GITHUB_WORKSPACE}/dormguard-release.tar.gz"
-          if [ ! -f "$TARBALL" ]; then
-            echo "错误：未找到 $TARBALL" >&2
-            ls -la "${GITHUB_WORKSPACE}" >&2
-            exit 1
-          fi
-          CI_SCRIPT="/opt/DormGuard/deploy/ci-deploy.sh"
-          if [ ! -f "$CI_SCRIPT" ]; then
-            WORK="/tmp/dormguard-release"
-            rm -rf "$WORK"
-            mkdir -p "$WORK"
-            tar xzf "$TARBALL" -C "$WORK"
-            sudo /usr/bin/bash "$WORK/deploy/apply-release.sh" "$WORK"
-            rm -rf "$WORK" || true
-          else
-            sudo /usr/bin/bash "$CI_SCRIPT" "$TARBALL"
-          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git checkout --orphan release-tmp
+          git rm -rf . 2>/dev/null || true
+          ls -lh dormguard-release.tar.gz
+          git add dormguard-release.tar.gz
+          git commit -m "release: ${GITHUB_SHA::7}"
+          git push origin "release-tmp:release" --force
+          echo "tarball pushed to release branch"
